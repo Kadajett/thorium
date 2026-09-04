@@ -17,6 +17,7 @@ target/
 
 *.apk
 *.aab
+*.tgz
 *.jks
 *.keystore
 local.properties
