@@ -1,0 +1,15 @@
+[package]
+name = "thorium-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+description = "Platform-neutral domain and input types for Thorium"
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"

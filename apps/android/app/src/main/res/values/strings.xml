@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Thorium</string>
+    <string name="companion_unavailable">This game requires both displays. The companion display could not be started, so the game was closed.</string>
+</resources>

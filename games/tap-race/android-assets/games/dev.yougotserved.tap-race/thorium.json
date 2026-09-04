@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "packageId": "dev.yougotserved.tap-race",
+  "version": "0.1.0",
+  "displayName": "Tap Race",
+  "summary": "Two local players race to fifty taps on Thor's two surfaces.",
+  "description": "The main surface shows the race while the companion surface provides one large semantic control per local Player Slot.",
+  "runtime": {
+    "kind": "web-v1",
+    "sdkCompatibility": "^0.1.0",
+    "entrypoints": {
+      "main": {
+        "path": "main/index.html",
+        "purpose": "primary-gameplay"
+      },
+      "companion": {
+        "path": "companion/index.html",
+        "purpose": "companion-controls"
+      }
+    },
+    "files": ["main/index.html", "companion/index.html", "dist/game.js"]
+  },
+  "displays": {
+    "requiredSurfaces": ["main", "companion"],
+    "supportsSingleSurfaceFallback": false,
+    "main": {
+      "logicalWidth": 960,
+      "logicalHeight": 540,
+      "maximumDevicePixelRatio": 2
+    },
+    "companion": {
+      "logicalWidth": 960,
+      "logicalHeight": 540,
+      "maximumDevicePixelRatio": 2
+    }
+  },
+  "players": {
+    "minSlots": 2,
+    "maxSlots": 4,
+    "maxLocalSlots": 2,
+    "sameAccountMultipleSlots": true
+  },
+  "multiplayer": {
+    "online": true,
+    "roomName": "game_session",
+    "protocol": "thorium-game-channel-v1"
+  },
+  "controls": [
+    { "id": "tap", "label": "Tap", "kind": "button" }
+  ],
+  "capabilities": ["same-device-peer", "colyseus-session"],
+  "budgets": {
+    "maxPackageBytes": 1048576,
+    "maxFileCount": 8,
+    "maxLocalPeerMessageBytes": 4096
+  }
+}

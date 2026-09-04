@@ -1,0 +1,8 @@
+packages:
+  - "packages/*"
+  - "games/*"
+  - "services/*"
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true

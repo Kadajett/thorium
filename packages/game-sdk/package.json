@@ -1,0 +1,38 @@
+{
+  "name": "@thorium/game-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser SDK and package tooling for Thorium dual-screen games",
+  "exports": {
+    ".": "./dist/index.js",
+    "./colyseus": "./dist/colyseus.js",
+    "./testing": "./dist/testing.js",
+    "./tooling": "./dist/tooling.js"
+  },
+  "bin": {
+    "thorium-game": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "schema",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/*.test.js",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "0.18.2",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

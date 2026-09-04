@@ -1,0 +1,25 @@
+{
+  "name": "@thorium-game/tap-race",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test --experimental-strip-types src/tap-race.test.ts",
+    "descriptor": "npm run build && node ../../packages/game-sdk/dist/cli.js validate android-assets/games/dev.yougotserved.tap-race/thorium.json --out deploy-descriptor.json",
+    "pack": "npm run build && node ../../packages/game-sdk/dist/cli.js pack android-assets/games/dev.yougotserved.tap-race/thorium.json --archive artifacts/dev.yougotserved.tap-race-0.1.0.zip --descriptor deploy-descriptor.json",
+    "serve": "npm run build && node ../../packages/game-sdk/dist/cli.js serve android-assets/games/dev.yougotserved.tap-race/thorium.json"
+  },
+  "dependencies": {
+    "@thorium/game-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
