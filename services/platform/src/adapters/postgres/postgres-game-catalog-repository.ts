@@ -120,8 +120,8 @@ implements GameCatalogRepository, GameReleasePublicationRepository {
                 $2::text IS NULL
                 OR lower(
                   package_id || E'\n'
-                  || release_json ->> 'displayName' || E'\n'
-                  || release_json ->> 'summary' || E'\n'
+                  || (release_json ->> 'displayName') || E'\n'
+                  || (release_json ->> 'summary') || E'\n'
                   || (release_json -> 'tags')::text
                 ) LIKE '%' || $2 || '%'
               )

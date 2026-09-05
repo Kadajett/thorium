@@ -60,4 +60,17 @@ describeWithPostgres("PostgreSQL game catalog publication", () => {
       .resolves.toEqual(fixture.release);
     await expect(catalog.list({ limit: 20 })).resolves.toEqual({ items: [fixture.release] });
   });
+
+  it("lists and searches the latest published release", async () => {
+    const fixture = createTestGamePackageFixture("https://games.yougotserved.dev");
+    await catalog.publish(fixture.release);
+
+    await expect(catalog.list({ limit: 20 })).resolves.toMatchObject({
+      items: [{ packageId: fixture.release.packageId }],
+    });
+    await expect(catalog.list({ query: fixture.release.displayName, limit: 20 }))
+      .resolves.toMatchObject({
+        items: [{ packageId: fixture.release.packageId }],
+      });
+  });
 });
