@@ -31,11 +31,14 @@ export interface RunningGame {
 
 function ensureCanvas(): HTMLCanvasElement {
   const existing = document.querySelector<HTMLCanvasElement>("canvas[data-thorium-game]");
-  if (existing) return existing;
-  const canvas = document.createElement("canvas");
-  canvas.dataset.thoriumGame = "true";
-  canvas.setAttribute("aria-label", "Game surface");
-  document.body.replaceChildren(canvas);
+  const canvas = existing ?? document.createElement("canvas");
+  if (!existing) {
+    canvas.dataset.thoriumGame = "true";
+    canvas.setAttribute("aria-label", "Game surface");
+    document.body.replaceChildren(canvas);
+  }
+  // A predeclared canvas needs the same independent CSS size as a new one.
+  // Otherwise its intrinsic backing size feeds back into ResizeObserver at DPR > 1.
   Object.assign(document.documentElement.style, { width: "100%", height: "100%", margin: "0" });
   Object.assign(document.body.style, {
     width: "100%",
