@@ -113,9 +113,9 @@ removed full-canvas painting and reserved header room for the FPS label. A
 started practice and scored a word, and the timer was clear of the overlay.
 This is improved but still not a 60 FPS pass.
 
-Raw local evidence is retained at
-`/tmp/word-before-compositor-four-core-active.json` and
-`/tmp/word-compositor-four-core-active.json`. These are diagnostic artifacts,
+Raw local evidence is retained in the sibling game's
+`word-duel/artifacts/adb/word-before-compositor-four-core-active.json` and
+`word-duel/artifacts/adb/word-compositor-four-core-active.json`. These are diagnostic artifacts,
 not credentials or publication authorizations. For a final gate, capture
 screenshots/readbacks outside the measurement window and confirm that actual
 gameplay has started before collecting. The emulator may need a background tap
@@ -143,6 +143,13 @@ The Astra high workers began `stack-relay` and `signal-fleet` as separate siblin
 projects, then received model-capacity errors. Their partial work is preserved;
 neither should be treated as verified or publishable. No model substitution was
 made. Resume the existing work rather than overwriting it on the next attempt.
+
+Completed source checkpoints are local Git commits `9947112` in `orbit-breaker`,
+`6822884` in `word-duel`, and `0bb9f4b` in `vector-drift`. They have no configured
+remote and were not published. Frozen ZIPs remain in each game's ignored
+`artifacts/` directory. Vector's raw sample is preserved under
+`vector-drift/artifacts/adb/vector-drift-four-core-active.json`; that diagnostic
+included canvas inspection during collection and is not a final clean FPS run.
 
 ## Screenshot caveat
 
