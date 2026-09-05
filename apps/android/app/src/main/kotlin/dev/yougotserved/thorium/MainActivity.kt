@@ -3,7 +3,9 @@ package dev.yougotserved.thorium
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -27,6 +29,7 @@ class MainActivity : ComponentActivity() {
     private val catalogControllerCommands = MutableSharedFlow<CatalogControllerCommand>(
         extraBufferCapacity = 16,
     )
+    private val catalogStickNavigator = CatalogStickNavigator()
     private var catalogItems by mutableStateOf(emptyList<CatalogItem>())
     private var catalogLoading by mutableStateOf(true)
     private var catalogError by mutableStateOf<String?>(null)
@@ -66,6 +69,19 @@ class MainActivity : ComponentActivity() {
             return super.dispatchKeyEvent(event)
         }
         CatalogAndroidKeyPolicy.command(event.keyCode, event.action, event.repeatCount)?.let {
+            catalogControllerCommands.tryEmit(it)
+        }
+        return true
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        val isJoystickMove = event.action == MotionEvent.ACTION_MOVE &&
+            event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
+        if (!isJoystickMove) return super.dispatchGenericMotionEvent(event)
+
+        val horizontal = centeredAxisValue(event, MotionEvent.AXIS_X)
+        val vertical = centeredAxisValue(event, MotionEvent.AXIS_Y)
+        catalogStickNavigator.command(horizontal, vertical, event.eventTime)?.let {
             catalogControllerCommands.tryEmit(it)
         }
         return true
@@ -208,5 +224,11 @@ class MainActivity : ComponentActivity() {
         runOnUiThread {
             if (!destroyed.get() && (request == null || request == requestSequence.get())) update()
         }
+    }
+
+    private fun centeredAxisValue(event: MotionEvent, axis: Int): Float {
+        val value = event.getAxisValue(axis)
+        val flat = event.device?.getMotionRange(axis, event.source)?.flat ?: 0f
+        return if (kotlin.math.abs(value) > flat) value else 0f
     }
 }

@@ -52,6 +52,60 @@ class CatalogControllerPolicyTest {
     }
 
     @Test
+    fun stickUsesADeadZoneAndMovesOncePerDeliberateDeflection() {
+        val navigator = CatalogStickNavigator()
+
+        assertNull(navigator.command(horizontal = 0.2f, vertical = 0.1f, eventTimeMillis = 1))
+        assertEquals(
+            CatalogControllerCommand.MOVE_RIGHT,
+            navigator.command(horizontal = 0.8f, vertical = 0.1f, eventTimeMillis = 2),
+        )
+        assertNull(navigator.command(horizontal = 0.9f, vertical = 0.1f, eventTimeMillis = 300))
+        assertNull(navigator.command(horizontal = 0.1f, vertical = 0.1f, eventTimeMillis = 301))
+        assertEquals(
+            CatalogControllerCommand.MOVE_RIGHT,
+            navigator.command(horizontal = 0.8f, vertical = 0.1f, eventTimeMillis = 302),
+        )
+    }
+
+    @Test
+    fun heldStickRepeatsAtAControlledRateAndChangesDirectionImmediately() {
+        val navigator = CatalogStickNavigator(
+            initialRepeatDelayMillis = 300,
+            repeatIntervalMillis = 100,
+        )
+
+        assertEquals(
+            CatalogControllerCommand.MOVE_DOWN,
+            navigator.command(horizontal = 0.1f, vertical = 0.9f, eventTimeMillis = 1_000),
+        )
+        assertNull(navigator.command(horizontal = 0.1f, vertical = 0.9f, eventTimeMillis = 1_299))
+        assertEquals(
+            CatalogControllerCommand.MOVE_DOWN,
+            navigator.command(horizontal = 0.1f, vertical = 0.9f, eventTimeMillis = 1_300),
+        )
+        assertNull(navigator.command(horizontal = 0.1f, vertical = 0.9f, eventTimeMillis = 1_399))
+        assertEquals(
+            CatalogControllerCommand.MOVE_DOWN,
+            navigator.command(horizontal = 0.1f, vertical = 0.9f, eventTimeMillis = 1_400),
+        )
+        assertEquals(
+            CatalogControllerCommand.MOVE_LEFT,
+            navigator.command(horizontal = -0.9f, vertical = 0.2f, eventTimeMillis = 1_401),
+        )
+    }
+
+    @Test
+    fun stickChoosesTheDominantAxisForDiagonalInput() {
+        val navigator = CatalogStickNavigator()
+
+        assertEquals(
+            CatalogControllerCommand.MOVE_UP,
+            navigator.command(horizontal = 0.7f, vertical = -0.9f, eventTimeMillis = 1),
+        )
+    }
+
+    @Test
     fun movesCardToSearchToRefreshAndBackToTheSameCard() {
         var focus = CatalogFocus(CatalogFocusTarget.CARD, cardIndex = 1)
 

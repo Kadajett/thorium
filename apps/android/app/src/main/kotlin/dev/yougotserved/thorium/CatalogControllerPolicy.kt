@@ -1,5 +1,7 @@
 package dev.yougotserved.thorium
 
+import kotlin.math.abs
+
 object AndroidCatalogKeyCode {
     const val DPAD_UP = 19
     const val DPAD_DOWN = 20
@@ -64,6 +66,59 @@ object CatalogAndroidKeyPolicy {
         AndroidCatalogKeyCode.DPAD_LEFT,
         AndroidCatalogKeyCode.DPAD_RIGHT,
     )
+}
+
+class CatalogStickNavigator(
+    private val activationThreshold: Float = 0.62f,
+    private val releaseThreshold: Float = 0.34f,
+    private val initialRepeatDelayMillis: Long = 360,
+    private val repeatIntervalMillis: Long = 120,
+) {
+    private var activeDirection: CatalogControllerCommand? = null
+    private var nextRepeatAtMillis = 0L
+
+    init {
+        require(activationThreshold in 0f..1f)
+        require(releaseThreshold in 0f..activationThreshold)
+        require(initialRepeatDelayMillis >= 0)
+        require(repeatIntervalMillis > 0)
+    }
+
+    fun command(horizontal: Float, vertical: Float, eventTimeMillis: Long): CatalogControllerCommand? {
+        require(horizontal.isFinite())
+        require(vertical.isFinite())
+        require(eventTimeMillis >= 0)
+
+        val strongestMagnitude = maxOf(abs(horizontal), abs(vertical))
+        if (strongestMagnitude <= releaseThreshold) {
+            activeDirection = null
+            nextRepeatAtMillis = 0
+            return null
+        }
+        if (strongestMagnitude < activationThreshold) return null
+
+        val direction = if (abs(horizontal) > abs(vertical)) {
+            if (horizontal < 0) {
+                CatalogControllerCommand.MOVE_LEFT
+            } else {
+                CatalogControllerCommand.MOVE_RIGHT
+            }
+        } else if (vertical < 0) {
+            CatalogControllerCommand.MOVE_UP
+        } else {
+            CatalogControllerCommand.MOVE_DOWN
+        }
+
+        if (direction != activeDirection) {
+            activeDirection = direction
+            nextRepeatAtMillis = eventTimeMillis + initialRepeatDelayMillis
+            return direction
+        }
+        if (eventTimeMillis < nextRepeatAtMillis) return null
+
+        nextRepeatAtMillis = eventTimeMillis + repeatIntervalMillis
+        return direction
+    }
 }
 
 enum class CatalogFocusTarget {

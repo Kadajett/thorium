@@ -36,11 +36,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -87,6 +89,7 @@ fun CatalogScreen(
     val currentOnAction by rememberUpdatedState(onAction)
     val currentOnSearch by rememberUpdatedState(onSearch)
     val currentOnBack by rememberUpdatedState(onBack)
+    val focusManager = LocalFocusManager.current
 
     BoxWithConstraints(
         modifier = Modifier
@@ -123,10 +126,13 @@ fun CatalogScreen(
             controllerCommands.collect { command ->
                 when (command) {
                     CatalogControllerCommand.MOVE_UP,
-                    CatalogControllerCommand.MOVE_DOWN,
-                    CatalogControllerCommand.MOVE_LEFT,
-                    CatalogControllerCommand.MOVE_RIGHT,
-                    -> Unit // Compose Foundation owns D-pad and stick traversal.
+                    -> if (!searchEditing) focusManager.moveFocus(FocusDirection.Up)
+                    CatalogControllerCommand.MOVE_DOWN ->
+                        if (!searchEditing) focusManager.moveFocus(FocusDirection.Down)
+                    CatalogControllerCommand.MOVE_LEFT ->
+                        if (!searchEditing) focusManager.moveFocus(FocusDirection.Left)
+                    CatalogControllerCommand.MOVE_RIGHT ->
+                        if (!searchEditing) focusManager.moveFocus(FocusDirection.Right)
                     CatalogControllerCommand.ACTIVATE -> when (
                         CatalogFocusPolicy.activation(focus, currentMatches.size)
                     ) {
