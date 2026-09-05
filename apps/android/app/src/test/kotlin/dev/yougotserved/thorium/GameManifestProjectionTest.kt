@@ -8,6 +8,22 @@ import org.junit.Test
 
 class GameManifestProjectionTest {
     @Test
+    fun supportsCurrentAndLegacySdkRequirementsButRejectsFutureContracts() {
+        val manifest = fixtureManifest()
+        val runtime = manifest.getJSONObject("runtime")
+        listOf("0.1.0", "^0.1.0", "0.1.1", "^0.1.1").forEach { supported ->
+            runtime.put("sdkCompatibility", supported)
+            assertEquals(supported, GameManifestProjectionParser.parseManifest(manifest).runtime.sdkCompatibility)
+        }
+        listOf("0.1.2", "^0.1.2", "^0.2.0", "^1.0.0", "0.1.1-beta.1", "*").forEach { future ->
+            runtime.put("sdkCompatibility", future)
+            assertThrows(future, CatalogParseException::class.java) {
+                GameManifestProjectionParser.parseManifest(manifest)
+            }
+        }
+    }
+
+    @Test
     fun rejectsMalformedOrAmbiguousControllerProfiles() {
         val controls = listOf(ReleaseControl("fire", "Fire", "button"), ReleaseControl("aim", "Aim", "axis"))
         val invalid = listOf(

@@ -9,6 +9,17 @@ import org.junit.Test
 
 class CatalogJsonParserTest {
     @Test
+    fun parsesPublishedCinder011AndSerpent013WithTheirActualSdkRequirements() {
+        // Captured from public /v1/catalog/games?limit=20 on 2026-09-04; no credentials.
+        val raw = requireNotNull(javaClass.getResource("/live-catalog-sdk-0.1.1.json")).readText()
+        val page = CatalogJsonParser.parsePage(raw)
+        assertEquals(mapOf("dev.yougotserved.cinder-circuit" to "0.1.1", "dev.yougotserved.serpent-world" to "0.1.3"),
+            page.items.associate { it.packageId to it.version })
+        assertTrue(page.items.all { it.manifest.runtime.sdkCompatibility == "^0.1.1" })
+        assertTrue(page.items.all { it.controllerBindings != null })
+    }
+
+    @Test
     fun parsesThePlatformGameReleaseAndDescriptorFields() {
         val page = CatalogJsonParser.parsePage(
             JSONObject().put("items", JSONArray().put(releaseJson())).toString(),

@@ -98,7 +98,7 @@ object GameManifestProjectionParser {
         val kind = runtimeJson.requiredString("kind", 32)
         if (kind != "web-v1") invalid("runtime.kind is unsupported")
         val sdkCompatibility = runtimeJson.requiredString("sdkCompatibility", 64)
-        if (sdkCompatibility != "^0.1.0" && sdkCompatibility != "0.1.0") {
+        if (sdkCompatibility !in SUPPORTED_SDK_REQUIREMENTS) {
             invalid("runtime SDK is incompatible")
         }
         val entrypoints = runtimeJson.requiredObject("entrypoints")
@@ -351,6 +351,10 @@ object GameManifestProjectionParser {
     }
 
     private fun invalid(message: String): Nothing = throw CatalogParseException(message)
+
+    // The host bridge implements SDK 0.1.1 while retaining the 0.1.0 contract.
+    // Do not admit future patch requirements merely because their major/minor match.
+    private val SUPPORTED_SDK_REQUIREMENTS = setOf("0.1.0", "^0.1.0", "0.1.1", "^0.1.1")
 
     private val MANIFEST_KEYS = setOf(
         "\$schema",

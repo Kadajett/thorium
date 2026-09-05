@@ -1,0 +1,405 @@
+{
+  "items": [
+    {
+      "schema": 1,
+      "packageId": "dev.yougotserved.cinder-circuit",
+      "version": "0.1.1",
+      "displayName": "Cinder Circuit",
+      "summary": "Three lanes. Ten card types. One opposing core. An online tactical card duel for both Thor screens.",
+      "description": "Deploy constructs, cast protocols, and break your opponent's core in a server-authoritative 1v1 duel. The upper display is the public table; only your lower display receives your private hand. Each account contributes one local Player Slot to a two-participant Match. Requires online matchmaking and both surfaces.",
+      "runtime": {
+        "kind": "web-v1",
+        "sdkCompatibility": "^0.1.1",
+        "entrypoints": {
+          "main": {
+            "path": "main/index.html",
+            "purpose": "primary-gameplay"
+          },
+          "companion": {
+            "path": "companion/index.html",
+            "purpose": "companion-controls"
+          }
+        },
+        "files": [
+          "main/index.html",
+          "companion/index.html",
+          "dist/client.js",
+          "dist/style.css"
+        ]
+      },
+      "displays": {
+        "requiredSurfaces": [
+          "main",
+          "companion"
+        ],
+        "supportsSingleSurfaceFallback": false,
+        "main": {
+          "logicalWidth": 960,
+          "logicalHeight": 540,
+          "maximumDevicePixelRatio": 2
+        },
+        "companion": {
+          "logicalWidth": 620,
+          "logicalHeight": 540,
+          "maximumDevicePixelRatio": 2
+        }
+      },
+      "players": {
+        "minSlots": 1,
+        "maxSlots": 1,
+        "maxLocalSlots": 1,
+        "sameAccountMultipleSlots": false,
+        "defaultLocalSeatPlan": {
+          "main": [],
+          "companion": [
+            0
+          ]
+        }
+      },
+      "multiplayer": {
+        "online": true,
+        "requiresOnline": true,
+        "roomName": "game_session",
+        "protocol": "thorium-game-channel-v1"
+      },
+      "controls": [
+        {
+          "id": "confirm",
+          "label": "Play selected card",
+          "kind": "button"
+        },
+        {
+          "id": "left",
+          "label": "Previous card",
+          "kind": "button"
+        },
+        {
+          "id": "right",
+          "label": "Next card",
+          "kind": "button"
+        },
+        {
+          "id": "lane-left",
+          "label": "Previous lane",
+          "kind": "button"
+        },
+        {
+          "id": "lane-right",
+          "label": "Next lane",
+          "kind": "button"
+        },
+        {
+          "id": "end",
+          "label": "End turn and strike",
+          "kind": "button"
+        },
+        {
+          "id": "cancel",
+          "label": "Back",
+          "kind": "button"
+        },
+        {
+          "id": "help",
+          "label": "Show rules",
+          "kind": "button"
+        },
+        {
+          "id": "forfeit",
+          "label": "Ask to forfeit",
+          "kind": "button"
+        }
+      ],
+      "controllerBindings": {
+        "schema": 1,
+        "bindings": [
+          {
+            "kind": "button",
+            "input": "south",
+            "control": "confirm"
+          },
+          {
+            "kind": "button",
+            "input": "east",
+            "control": "cancel"
+          },
+          {
+            "kind": "button",
+            "input": "west",
+            "control": "help"
+          },
+          {
+            "kind": "button",
+            "input": "north",
+            "control": "end"
+          },
+          {
+            "kind": "button",
+            "input": "dpad-left",
+            "control": "left"
+          },
+          {
+            "kind": "button",
+            "input": "dpad-right",
+            "control": "right"
+          },
+          {
+            "kind": "button",
+            "input": "dpad-up",
+            "control": "lane-left"
+          },
+          {
+            "kind": "button",
+            "input": "dpad-down",
+            "control": "lane-right"
+          },
+          {
+            "kind": "button",
+            "input": "left-shoulder",
+            "control": "lane-left"
+          },
+          {
+            "kind": "button",
+            "input": "right-shoulder",
+            "control": "lane-right"
+          },
+          {
+            "kind": "button",
+            "input": "select",
+            "control": "help"
+          },
+          {
+            "kind": "button",
+            "input": "start",
+            "control": "forfeit"
+          },
+          {
+            "kind": "axis-button",
+            "input": "left-x",
+            "direction": -1,
+            "control": "left"
+          },
+          {
+            "kind": "axis-button",
+            "input": "left-x",
+            "direction": 1,
+            "control": "right"
+          }
+        ]
+      },
+      "capabilities": [
+        "colyseus-session",
+        "same-device-peer"
+      ],
+      "budgets": {
+        "maxPackageBytes": 2097152,
+        "maxFileCount": 8,
+        "maxLocalPeerMessageBytes": 256
+      },
+      "tags": [],
+      "publishedAt": "2026-09-05T03:49:37.284Z",
+      "contentDigest": "88be8780c51f079fcd8cb645733c9433c21408030e24301acd29d651e4f4ceb5",
+      "bundle": {
+        "fileName": "dev.yougotserved.cinder-circuit-0.1.1.zip",
+        "url": "https://games.yougotserved.dev/v1/packages/dev.yougotserved.cinder-circuit/0.1.1/dev.yougotserved.cinder-circuit-0.1.1.zip",
+        "sha256": "fd4799b221eab7f067ea827fdcff908eca85cecb794ca7f98200d79e5bdb0266",
+        "sizeBytes": 161004,
+        "manifestSha256": "68101ad087b0a7a94858f5ea0a7c524e69f0db88801359aaaef5b18d05b888dd",
+        "files": [
+          {
+            "path": "companion/index.html",
+            "sha256": "f0d3ecffa8c1f4d6090bbb965cad232a62947aeac1c791db17f55bd8809552b9",
+            "size": 326
+          },
+          {
+            "path": "dist/client.js",
+            "sha256": "74b84e9dd375bdc03a425d477c61b6123704c28d53bf04432299f5cf94aadd2b",
+            "size": 625385
+          },
+          {
+            "path": "dist/style.css",
+            "sha256": "538914a4a38e1d29737fe132faf8e9bef86d5a60bf00fa2cae5bf30350930b4d",
+            "size": 13428
+          },
+          {
+            "path": "main/index.html",
+            "sha256": "0a195e016da24709e3c37c2d9bcc36fd113f17c8eb67b1df458aa752920b2d91",
+            "size": 322
+          }
+        ]
+      }
+    },
+    {
+      "$schema": "https://games.yougotserved.dev/schemas/thorium-game-manifest-v1.json",
+      "schema": 1,
+      "packageId": "dev.yougotserved.serpent-world",
+      "version": "0.1.3",
+      "displayName": "Serpent World",
+      "summary": "Grow, hunt, and survive across a procedurally generated world of authoritative spatial shards.",
+      "description": "A controller-first large-world snake game. The main surface renders the nearby world while the companion surface provides a live tactical radar, precise steering, abilities, status, and shard telemetry. Multiplayer world admission requires a delegated Thorium platform capability.",
+      "runtime": {
+        "kind": "web-v1",
+        "sdkCompatibility": "^0.1.1",
+        "entrypoints": {
+          "main": {
+            "path": "main/index.html",
+            "purpose": "primary-gameplay"
+          },
+          "companion": {
+            "path": "companion/index.html",
+            "purpose": "companion-controls"
+          }
+        },
+        "files": [
+          "main/index.html",
+          "companion/index.html",
+          "dist/client.js"
+        ]
+      },
+      "displays": {
+        "requiredSurfaces": [
+          "main",
+          "companion"
+        ],
+        "supportsSingleSurfaceFallback": false,
+        "main": {
+          "logicalWidth": 960,
+          "logicalHeight": 540,
+          "maximumDevicePixelRatio": 2
+        },
+        "companion": {
+          "logicalWidth": 960,
+          "logicalHeight": 540,
+          "maximumDevicePixelRatio": 2
+        }
+      },
+      "players": {
+        "minSlots": 1,
+        "maxSlots": 1,
+        "maxLocalSlots": 1,
+        "sameAccountMultipleSlots": false,
+        "defaultLocalSeatPlan": {
+          "main": [
+            0
+          ],
+          "companion": []
+        }
+      },
+      "multiplayer": {
+        "online": true,
+        "requiresOnline": true,
+        "roomName": "game_session",
+        "protocol": "thorium-game-channel-v1"
+      },
+      "controls": [
+        {
+          "id": "boost",
+          "label": "Boost",
+          "kind": "button"
+        },
+        {
+          "id": "steer-x",
+          "label": "Steer horizontally",
+          "kind": "axis"
+        },
+        {
+          "id": "steer-y",
+          "label": "Steer vertically",
+          "kind": "axis"
+        },
+        {
+          "id": "pulse",
+          "label": "Threat pulse",
+          "kind": "button"
+        },
+        {
+          "id": "brake",
+          "label": "Precision brake",
+          "kind": "button"
+        }
+      ],
+      "controllerBindings": {
+        "schema": 1,
+        "bindings": [
+          {
+            "kind": "axis",
+            "input": "left-x",
+            "control": "steer-x"
+          },
+          {
+            "kind": "axis",
+            "input": "left-y",
+            "control": "steer-y"
+          },
+          {
+            "kind": "button",
+            "input": "south",
+            "control": "boost"
+          },
+          {
+            "kind": "button",
+            "input": "right-shoulder",
+            "control": "boost"
+          },
+          {
+            "kind": "button",
+            "input": "west",
+            "control": "pulse"
+          },
+          {
+            "kind": "button",
+            "input": "left-shoulder",
+            "control": "brake"
+          },
+          {
+            "kind": "axis-button",
+            "input": "right-trigger",
+            "direction": 1,
+            "control": "boost"
+          },
+          {
+            "kind": "axis-button",
+            "input": "left-trigger",
+            "direction": 1,
+            "control": "brake"
+          }
+        ]
+      },
+      "capabilities": [
+        "same-device-peer",
+        "colyseus-session"
+      ],
+      "budgets": {
+        "maxPackageBytes": 2097152,
+        "maxFileCount": 8,
+        "maxLocalPeerMessageBytes": 16384
+      },
+      "tags": [],
+      "publishedAt": "2026-09-05T03:49:37.429Z",
+      "contentDigest": "4072dc91199ee71b7d9bcb8197b53676a7fc303cd5184508929269fe72910c5a",
+      "bundle": {
+        "fileName": "dev.yougotserved.serpent-world-0.1.3.zip",
+        "url": "https://games.yougotserved.dev/v1/packages/dev.yougotserved.serpent-world/0.1.3/dev.yougotserved.serpent-world-0.1.3.zip",
+        "sha256": "097caa5a54a44a1594b91dd5bc405c7a3b18f97805c4e614e17f618a455cc692",
+        "sizeBytes": 159446,
+        "manifestSha256": "7d3c503bb00d1b028070741eaac76c25867fa743e80a4587b28698969c15e5f7",
+        "files": [
+          {
+            "path": "companion/index.html",
+            "sha256": "7e2b971a74ed10df088e74d0e3e1764e93455934da83d54ba5f58e9f75d4f6cf",
+            "size": 632
+          },
+          {
+            "path": "dist/client.js",
+            "sha256": "ad22361e75284ccbb0f08c6a5e7cc5ba1f4a500c1c00a5328b2a55b9129c4c26",
+            "size": 633416
+          },
+          {
+            "path": "main/index.html",
+            "sha256": "3f0b1148e005e165921aa13e4d62b9f54d2368eaff9a28a71d5a0bc4b4f109ca",
+            "size": 608
+          }
+        ]
+      }
+    }
+  ]
+}
