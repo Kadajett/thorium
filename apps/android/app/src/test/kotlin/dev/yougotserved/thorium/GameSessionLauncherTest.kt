@@ -50,6 +50,7 @@ class GameSessionLauncherTest {
             maxPlayers = 2,
             maxLocalSlots = 1,
             sameAccountMultipleSlots = false,
+            defaultLocalSeatPlan = null,
         )
 
         val launch = (launcher.start(game) as GameSessionStartResult.Ready).launch
@@ -57,6 +58,67 @@ class GameSessionLauncherTest {
         assertEquals(setOf(0), launch.localPlayerSlots)
         assertEquals(setOf(0), launch.controlledPlayerSlots(SurfaceRole.MAIN))
         assertTrue(launch.controlledPlayerSlots(SurfaceRole.COMPANION).isEmpty())
+    }
+
+    @Test
+    fun releaseAuthoredSeatPlanCanPutTheOnlyPlayerHandOnTheCompanion() {
+        var observed: GameSessionStartRequest? = null
+        val launcher = launcherWithAuthority { request ->
+            observed = request
+            validSession(request)
+        }
+        val game = onlineGame().copy(
+            minPlayers = 1,
+            maxPlayers = 1,
+            maxLocalSlots = 1,
+            sameAccountMultipleSlots = false,
+            defaultLocalSeatPlan = mapOf(
+                SurfaceRole.MAIN to emptySet(),
+                SurfaceRole.COMPANION to setOf(0),
+            ),
+            southButtonBinding = onlineGame().southButtonBinding?.copy(
+                surfaceRole = SurfaceRole.COMPANION,
+            ),
+        )
+
+        val launch = (launcher.start(game) as GameSessionStartResult.Ready).launch
+
+        assertTrue(launch.controlledPlayerSlots(SurfaceRole.MAIN).isEmpty())
+        assertEquals(setOf(0), launch.controlledPlayerSlots(SurfaceRole.COMPANION))
+        assertTrue(observed?.surfaces?.single { it.role == SurfaceRole.MAIN }?.playerSlots?.isEmpty() == true)
+        assertEquals(
+            setOf(0),
+            observed?.surfaces?.single { it.role == SurfaceRole.COMPANION }?.playerSlots,
+        )
+    }
+
+    @Test
+    fun requiredOnlineReleaseDoesNotOpenADegradedLocalSession() {
+        val missingAccount = GameSessionLauncher(
+            authority = GameSessionAuthorityPort { _, _ -> error("authority must not be called") },
+            accountAuthorization = AccountAuthorizationPort { null },
+            releaseIntegrity = GameReleaseIntegrityPort { true },
+            nowEpochMs = { NOW },
+            newId = { LOCAL_SESSION_ID },
+        )
+        assertEquals(
+            GameSessionStartFailure.ACCOUNT_AUTHORIZATION_UNAVAILABLE,
+            (
+                missingAccount.start(onlineGame().copy(multiplayerRequiresOnline = true))
+                    as GameSessionStartResult.Failed
+                ).reason,
+        )
+
+        val unavailableAuthority = launcherWithAuthority {
+            throw GameSessionAuthorityUnavailableException()
+        }
+        assertEquals(
+            GameSessionStartFailure.AUTHORITY_UNAVAILABLE,
+            (
+                unavailableAuthority.start(onlineGame().copy(multiplayerRequiresOnline = true))
+                    as GameSessionStartResult.Failed
+                ).reason,
+        )
     }
 
     @Test

@@ -1,5 +1,6 @@
 package dev.yougotserved.thorium
 
+import android.content.Context
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -37,7 +38,11 @@ class GameSessionLauncher internal constructor(
         }
 
         val authorization = runCatching { accountAuthorization.current() }.getOrNull()
-            ?: return GameSessionStartResult.Ready(localLaunch(game, seatPlan))
+            ?: return if (game.multiplayerRequiresOnline) {
+                GameSessionStartResult.Failed(GameSessionStartFailure.ACCOUNT_AUTHORIZATION_UNAVAILABLE)
+            } else {
+                GameSessionStartResult.Ready(localLaunch(game, seatPlan))
+            }
         val request = GameSessionStartRequest(
             requestId = newId(),
             release = ExactGameRelease(game.packageId, game.version, digest),
@@ -52,7 +57,11 @@ class GameSessionLauncher internal constructor(
         val session = try {
             authority.start(request, authorization)
         } catch (_: GameSessionAuthorityUnavailableException) {
-            return GameSessionStartResult.Ready(localLaunch(game, seatPlan))
+            return if (game.multiplayerRequiresOnline) {
+                GameSessionStartResult.Failed(GameSessionStartFailure.AUTHORITY_UNAVAILABLE)
+            } else {
+                GameSessionStartResult.Ready(localLaunch(game, seatPlan))
+            }
         } catch (_: GameSessionAuthorityRejectedException) {
             return GameSessionStartResult.Failed(GameSessionStartFailure.AUTHORITY_REJECTED)
         } catch (_: GameSessionAuthorityContractException) {
@@ -117,6 +126,18 @@ class GameSessionLauncher internal constructor(
     )
 
     private fun defaultSeatPlan(game: CatalogGame): Map<SurfaceRole, Set<Int>>? {
+        game.defaultLocalSeatPlan?.let { configured ->
+            val plan = SurfaceRole.entries.associateWith { role -> configured[role].orEmpty() }
+            val slots = plan.values.flatten()
+            if (
+                slots.isNotEmpty() && slots.toSet().size == slots.size &&
+                slots.toSet() == (0 until slots.size).toSet() &&
+                slots.size in game.minPlayers..game.maxLocalSlots &&
+                slots.size <= game.maxPlayers &&
+                (slots.size == 1 || game.sameAccountMultipleSlots)
+            ) return plan
+            return null
+        }
         if (
             game.minPlayers !in 1..16 || game.maxPlayers !in game.minPlayers..16 ||
             game.maxLocalSlots !in 1..game.maxPlayers
@@ -151,9 +172,13 @@ class GameSessionLauncher internal constructor(
         fun create(
             platformBaseUrl: String,
             packageStore: GamePackageStore,
+            context: Context,
         ): GameSessionLauncher = GameSessionLauncher(
             authority = HttpGameSessionAuthorityAdapter(platformBaseUrl),
-            accountAuthorization = AbsentAccountAuthorizationPort,
+            accountAuthorization = HttpDeviceAccountAuthorizationAdapter(
+                platformBaseUrl,
+                context.applicationContext,
+            ),
             releaseIntegrity = GameReleaseIntegrityPort(packageStore::verifyForLaunch),
         )
     }
@@ -169,6 +194,8 @@ enum class GameSessionStartFailure {
     LOCAL_PLAYER_POLICY,
     AUTHORITY_REJECTED,
     AUTHORITY_RESPONSE_MISMATCH,
+    ACCOUNT_AUTHORIZATION_UNAVAILABLE,
+    AUTHORITY_UNAVAILABLE,
 }
 
 internal data class AccountAuthorization(val bearerToken: String) {

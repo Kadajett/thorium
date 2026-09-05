@@ -36,7 +36,11 @@ class MainActivity : ComponentActivity() {
         packageStore = GamePackageStore(applicationContext)
         catalogClient = RemoteCatalogClient(BuildConfig.CATALOG_BASE_URL)
         packageDownloader = PackageDownloader(cacheDir.toPath().resolve("game-downloads"))
-        gameSessionLauncher = GameSessionLauncher.create(BuildConfig.CATALOG_BASE_URL, packageStore)
+        gameSessionLauncher = GameSessionLauncher.create(
+            BuildConfig.CATALOG_BASE_URL,
+            packageStore,
+            applicationContext,
+        )
         setContent {
             ThoriumTheme {
                 CatalogScreen(
@@ -55,6 +59,9 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (CatalogAndroidKeyPolicy.usesFrameworkFocusTraversal(event.keyCode)) {
+            return super.dispatchKeyEvent(event)
+        }
         if (!CatalogAndroidKeyPolicy.recognizes(event.keyCode)) {
             return super.dispatchKeyEvent(event)
         }
@@ -163,6 +170,10 @@ class MainActivity : ComponentActivity() {
                             "The game session request was rejected."
                         GameSessionStartFailure.AUTHORITY_RESPONSE_MISMATCH ->
                             "The game session response did not match this installed release."
+                        GameSessionStartFailure.ACCOUNT_AUTHORIZATION_UNAVAILABLE ->
+                            "Could not sign in this device for required online play."
+                        GameSessionStartFailure.AUTHORITY_UNAVAILABLE ->
+                            "This game's online authority is temporarily unavailable."
                     }
                     if (
                         result.reason == GameSessionStartFailure.RELEASE_INTEGRITY &&

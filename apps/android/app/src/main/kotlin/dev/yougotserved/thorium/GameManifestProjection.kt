@@ -28,12 +28,14 @@ data class ManifestPlayers(
     val maxSlots: Int,
     val maxLocalSlots: Int,
     val sameAccountMultipleSlots: Boolean,
+    val defaultLocalSeatPlan: Map<SurfaceRole, Set<Int>>?,
 )
 
 data class ManifestMultiplayer(
     val online: Boolean,
     val roomName: String,
     val protocol: String,
+    val requiresOnline: Boolean,
 )
 
 data class ManifestBudgets(
@@ -139,7 +141,32 @@ object GameManifestProjectionParser {
         if (maxLocalSlots > 1 && !sameAccount) {
             invalid("multiple local slots require sameAccountMultipleSlots")
         }
-        val players = ManifestPlayers(minSlots, maxSlots, maxLocalSlots, sameAccount)
+        val defaultLocalSeatPlan = if (playersJson.has("defaultLocalSeatPlan")) {
+            val plan = playersJson.requiredObject("defaultLocalSeatPlan")
+            requireKeys(plan, SEAT_PLAN_KEYS, "players.defaultLocalSeatPlan")
+            val parsed = linkedMapOf(
+                SurfaceRole.MAIN to playerSlots(plan.requiredArray("main"), "main"),
+                SurfaceRole.COMPANION to playerSlots(plan.requiredArray("companion"), "companion"),
+            )
+            val flattened = parsed.values.flatten()
+            if (
+                flattened.toSet().size != flattened.size ||
+                flattened.toSet() != (0 until flattened.size).toSet() ||
+                flattened.size !in minSlots..maxLocalSlots ||
+                flattened.size > maxSlots ||
+                (flattened.size > 1 && !sameAccount)
+            ) invalid("default local seat plan is incompatible with player policy")
+            parsed
+        } else {
+            null
+        }
+        val players = ManifestPlayers(
+            minSlots,
+            maxSlots,
+            maxLocalSlots,
+            sameAccount,
+            defaultLocalSeatPlan,
+        )
 
         val controlsJson = value.requiredArray("controls")
         if (controlsJson.length() !in 1..32) invalid("controls count is invalid")
@@ -163,12 +190,14 @@ object GameManifestProjectionParser {
         val multiplayerJson = value.requiredObject("multiplayer")
         requireKeys(multiplayerJson, MULTIPLAYER_KEYS, "multiplayer")
         val online = multiplayerJson.requiredBoolean("online")
+        val requiresOnline = multiplayerJson.optionalBoolean("requiresOnline") ?: false
         val roomName = multiplayerJson.requiredString("roomName", 32)
         val protocol = multiplayerJson.requiredString("protocol", 64)
         if (
             roomName != "game_session" || protocol != "thorium-game-channel-v1" ||
             (online && "colyseus-session" !in capabilities)
         ) invalid("multiplayer contract is invalid")
+        if (requiresOnline && !online) invalid("requiresOnline needs online multiplayer")
 
         val budgetsJson = value.requiredObject("budgets")
         requireKeys(budgetsJson, BUDGET_KEYS, "budgets")
@@ -201,7 +230,7 @@ object GameManifestProjectionParser {
             runtime = ManifestRuntime(kind, sdkCompatibility, main, companion, files),
             displays = displays,
             players = players,
-            multiplayer = ManifestMultiplayer(online, roomName, protocol),
+            multiplayer = ManifestMultiplayer(online, roomName, protocol, requiresOnline),
             controls = controls,
             capabilities = capabilities,
             budgets = budgets,
@@ -243,6 +272,17 @@ object GameManifestProjectionParser {
         return (0 until array.length()).map { array.requiredString(it, 100) }
     }
 
+    private fun playerSlots(array: JSONArray, label: String): Set<Int> {
+        if (array.length() > 16) invalid("$label seat plan is too large")
+        val values = (0 until array.length()).map { index ->
+            val value = array.opt(index)
+            if (value !is Int || value !in 0..15) invalid("$label seat plan contains an invalid slot")
+            value
+        }
+        if (values.toSet().size != values.size) invalid("$label seat plan contains duplicate slots")
+        return values.toSet()
+    }
+
     private fun requireKeys(value: JSONObject, allowed: Set<String>, label: String) {
         val actual = buildSet {
             val keys = value.keys()
@@ -277,6 +317,12 @@ object GameManifestProjectionParser {
 
     private fun JSONObject.requiredBoolean(name: String): Boolean =
         opt(name) as? Boolean ?: invalid("$name must be boolean")
+
+    private fun JSONObject.optionalBoolean(name: String): Boolean? = when (val value = opt(name)) {
+        null -> null
+        is Boolean -> value
+        else -> invalid("$name must be boolean")
+    }
 
     private fun JSONObject.requiredInt(name: String, min: Int, max: Int): Int {
         val result = opt(name)
@@ -333,8 +379,10 @@ object GameManifestProjectionParser {
         "maxSlots",
         "maxLocalSlots",
         "sameAccountMultipleSlots",
+        "defaultLocalSeatPlan",
     )
-    private val MULTIPLAYER_KEYS = setOf("online", "roomName", "protocol")
+    private val SEAT_PLAN_KEYS = setOf("main", "companion")
+    private val MULTIPLAYER_KEYS = setOf("online", "roomName", "protocol", "requiresOnline")
     private val CONTROL_KEYS = setOf("id", "label", "kind")
     private val BUDGET_KEYS = setOf(
         "maxPackageBytes",
@@ -343,5 +391,5 @@ object GameManifestProjectionParser {
     )
     private val MANIFEST_REQUIRED_NESTED_KEYS = RUNTIME_KEYS + ENTRYPOINTS_KEYS + ENTRYPOINT_KEYS +
         DISPLAYS_KEYS + SCREEN_KEYS + PLAYERS_KEYS + MULTIPLAYER_KEYS + CONTROL_KEYS + BUDGET_KEYS +
-        (MANIFEST_KEYS - "\$schema")
+        (MANIFEST_KEYS - "\$schema") - setOf("defaultLocalSeatPlan", "requiresOnline")
 }

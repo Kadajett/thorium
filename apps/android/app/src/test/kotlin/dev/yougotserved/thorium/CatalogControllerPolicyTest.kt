@@ -20,6 +20,8 @@ class CatalogControllerPolicyTest {
 
         assertTrue(CatalogAndroidKeyPolicy.recognizes(AndroidCatalogKeyCode.DPAD_UP))
         assertTrue(CatalogAndroidKeyPolicy.recognizes(AndroidCatalogKeyCode.BUTTON_A))
+        assertTrue(CatalogAndroidKeyPolicy.usesFrameworkFocusTraversal(AndroidCatalogKeyCode.DPAD_UP))
+        assertFalse(CatalogAndroidKeyPolicy.usesFrameworkFocusTraversal(AndroidCatalogKeyCode.BUTTON_A))
         assertFalse(CatalogAndroidKeyPolicy.recognizes(24))
     }
 

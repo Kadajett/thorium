@@ -43,6 +43,8 @@ data class InstalledReleaseRecord(
     val southButtonBinding: SouthButtonBinding?,
     val capabilities: Set<String>,
     val integrity: InstalledReleaseIntegrity?,
+    val defaultLocalSeatPlan: Map<SurfaceRole, Set<Int>>? = null,
+    val multiplayerRequiresOnline: Boolean = false,
 ) {
     init {
         require(mainEntrypoint in runtimeFiles && companionEntrypoint in runtimeFiles)
@@ -51,6 +53,15 @@ data class InstalledReleaseRecord(
         require(maxLocalSlots in 1..maxPlayers)
         require(maxLocalSlots == 1 || sameAccountMultipleSlots)
         require(!multiplayerOnline || "colyseus-session" in capabilities)
+        require(!multiplayerRequiresOnline || multiplayerOnline)
+        defaultLocalSeatPlan?.let { plan ->
+            val slots = SurfaceRole.entries.flatMap { role -> plan[role].orEmpty() }
+            require(plan.keys.all { it in SurfaceRole.entries })
+            require(slots.isNotEmpty() && slots.toSet().size == slots.size)
+            require(slots.toSet() == (0 until slots.size).toSet())
+            require(slots.size in minPlayers..maxLocalSlots && slots.size <= maxPlayers)
+            require(slots.size == 1 || sameAccountMultipleSlots)
+        }
         require(maxLocalPeerMessageBytes in 1..64 * 1024)
         require(southButtonBinding == null || southButtonBinding.playerSlot in 0 until maxLocalSlots)
         require(integrity == null || integrity.files.map { it.path }.toSet() == runtimeFiles)
@@ -83,6 +94,8 @@ data class InstalledReleaseRecord(
         contentDigest = contentDigest,
         release = null,
         capabilities = capabilities,
+        defaultLocalSeatPlan = defaultLocalSeatPlan,
+        multiplayerRequiresOnline = multiplayerRequiresOnline,
     )
 }
 
@@ -111,6 +124,8 @@ object InstalledReleaseRecordCodec {
             manifestSha256 = release.bundle.manifestSha256,
             files = release.bundle.files,
         ),
+        defaultLocalSeatPlan = release.defaultLocalSeatPlan,
+        multiplayerRequiresOnline = release.multiplayerRequiresOnline,
     )
 
     fun encode(record: InstalledReleaseRecord): String {
@@ -126,7 +141,7 @@ object InstalledReleaseRecordCodec {
         val runtimeFiles = JSONArray()
         record.runtimeFiles.sorted().forEach(runtimeFiles::put)
         val root = JSONObject()
-            .put("schema", if (record.integrity == null) 1 else 2)
+            .put("schema", if (record.integrity == null) 1 else 3)
             .put("packageId", record.packageId)
             .put("version", record.version)
             .put("contentDigest", record.contentDigest)
@@ -142,9 +157,18 @@ object InstalledReleaseRecordCodec {
             .put("maxLocalSlots", record.maxLocalSlots)
             .put("sameAccountMultipleSlots", record.sameAccountMultipleSlots)
             .put("multiplayerOnline", record.multiplayerOnline)
+            .put("multiplayerRequiresOnline", record.multiplayerRequiresOnline)
             .put("maxLocalPeerMessageBytes", record.maxLocalPeerMessageBytes)
             .put("controls", controls)
             .put("capabilities", JSONArray(record.capabilities.sorted()))
+        record.defaultLocalSeatPlan?.let { plan ->
+            root.put(
+                "defaultLocalSeatPlan",
+                JSONObject()
+                    .put("main", JSONArray(plan[SurfaceRole.MAIN].orEmpty().sorted()))
+                    .put("companion", JSONArray(plan[SurfaceRole.COMPANION].orEmpty().sorted())),
+            )
+        }
         record.integrity?.let { integrity ->
             val files = JSONArray()
             integrity.files.sortedBy { it.path }.forEach { file ->
@@ -165,7 +189,10 @@ object InstalledReleaseRecordCodec {
         record.southButtonBinding?.let { binding ->
             root.put(
                 "southButton",
-                JSONObject().put("playerSlot", binding.playerSlot).put("controlId", binding.controlId),
+                JSONObject()
+                    .put("playerSlot", binding.playerSlot)
+                    .put("controlId", binding.controlId)
+                    .put("surfaceRole", binding.surfaceRole.wireValue),
             )
         }
         return root.toString()
@@ -177,7 +204,7 @@ object InstalledReleaseRecordCodec {
         }
         val root = JSONObject(raw)
         val schema = root.opt("schema") as? Int
-        if (schema == null || schema !in 1..2) {
+        if (schema == null || schema !in 1..3) {
             throw CatalogParseException("record schema is invalid")
         }
         val packageId = string(root, "packageId", 128)
@@ -219,7 +246,7 @@ object InstalledReleaseRecordCodec {
                 }
                 null
             }
-            2 -> root.optJSONObject("integrity")?.let(::parseIntegrity)
+            2, 3 -> root.optJSONObject("integrity")?.let(::parseIntegrity)
                 ?: throw CatalogParseException("record integrity is missing")
             else -> error("schema was already validated")
         }
@@ -227,6 +254,10 @@ object InstalledReleaseRecordCodec {
             SouthButtonBinding(
                 playerSlot = integer(value, "playerSlot", 0, 15),
                 controlId = string(value, "controlId", 32),
+                surfaceRole = optionalString(value, "surfaceRole", 16)?.let { role ->
+                    SurfaceRole.entries.firstOrNull { it.wireValue == role }
+                        ?: throw CatalogParseException("binding surface role is invalid")
+                } ?: SurfaceRole.MAIN,
             ).also { binding ->
                 if (controls.none { it.id == binding.controlId }) {
                     throw CatalogParseException("binding is invalid")
@@ -267,6 +298,21 @@ object InstalledReleaseRecordCodec {
         } else {
             boolean(root, "multiplayerOnline")
         }
+        val multiplayerRequiresOnline = if (schema == 3) {
+            boolean(root, "multiplayerRequiresOnline")
+        } else {
+            optionalBoolean(root, "multiplayerRequiresOnline") ?: false
+        }
+        val defaultLocalSeatPlan = root.optJSONObject("defaultLocalSeatPlan")?.let { plan ->
+            mapOf(
+                SurfaceRole.MAIN to playerSlots(plan, "main"),
+                SurfaceRole.COMPANION to playerSlots(plan, "companion"),
+            )
+        }.also {
+            if (root.has("defaultLocalSeatPlan") && it == null) {
+                throw CatalogParseException("default local seat plan is invalid")
+            }
+        }
         return InstalledReleaseRecord(
             packageId = packageId,
             version = version,
@@ -283,6 +329,7 @@ object InstalledReleaseRecordCodec {
             maxLocalSlots = maxLocalSlots,
             sameAccountMultipleSlots = sameAccountMultipleSlots,
             multiplayerOnline = multiplayerOnline,
+            multiplayerRequiresOnline = multiplayerRequiresOnline,
             maxLocalPeerMessageBytes = if (schema == 1) {
                 optionalInteger(root, "maxLocalPeerMessageBytes", 1, 64 * 1024)
                     ?: LEGACY_MAX_LOCAL_PEER_MESSAGE_BYTES
@@ -293,6 +340,7 @@ object InstalledReleaseRecordCodec {
             southButtonBinding = binding,
             capabilities = capabilities,
             integrity = integrity,
+            defaultLocalSeatPlan = defaultLocalSeatPlan,
         )
     }
 
@@ -326,6 +374,19 @@ object InstalledReleaseRecordCodec {
         }
     }
 
+    private fun playerSlots(parent: JSONObject, name: String): Set<Int> {
+        val array = parent.optJSONArray(name)
+            ?: throw CatalogParseException("$name seat plan is missing")
+        if (array.length() > 16) throw CatalogParseException("$name seat plan is too large")
+        val values = (0 until array.length()).map { index ->
+            array.opt(index) as? Int ?: throw CatalogParseException("$name seat plan is invalid")
+        }
+        if (values.any { it !in 0..15 } || values.toSet().size != values.size) {
+            throw CatalogParseException("$name seat plan is invalid")
+        }
+        return values.toSet()
+    }
+
     private fun screen(value: ReleaseScreen): JSONObject = JSONObject()
         .put("logicalWidth", value.logicalWidth)
         .put("logicalHeight", value.logicalHeight)
@@ -350,6 +411,14 @@ object InstalledReleaseRecordCodec {
 
     private fun boolean(parent: JSONObject, name: String): Boolean =
         parent.opt(name) as? Boolean ?: throw CatalogParseException("$name is invalid")
+
+    private fun optionalString(parent: JSONObject, name: String, max: Int): String? =
+        when (val value = parent.opt(name)) {
+            null -> null
+            is String -> value.takeIf { it.isNotEmpty() && it.length <= max }
+                ?: throw CatalogParseException("$name is invalid")
+            else -> throw CatalogParseException("$name is invalid")
+        }
 
     private fun long(parent: JSONObject, name: String, min: Long, max: Long): Long {
         val raw = parent.opt(name)

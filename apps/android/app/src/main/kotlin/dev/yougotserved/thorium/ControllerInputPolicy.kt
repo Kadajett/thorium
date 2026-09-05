@@ -5,6 +5,7 @@ import android.view.KeyEvent
 data class SouthButtonBinding(
     val playerSlot: Int,
     val controlId: String,
+    val surfaceRole: SurfaceRole = SurfaceRole.MAIN,
 ) {
     init {
         require(playerSlot in 0..15) { "Invalid PlayerSlot" }

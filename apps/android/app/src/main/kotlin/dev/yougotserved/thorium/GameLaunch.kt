@@ -143,7 +143,8 @@ data class GameLaunch(
         ) { "Invalid per-surface PlayerSlot leases" }
         require(
             southButtonBinding == null ||
-                southButtonBinding.playerSlot in controlledPlayerSlots.getValue(SurfaceRole.MAIN),
+                southButtonBinding.playerSlot in
+                controlledPlayerSlots.getValue(southButtonBinding.surfaceRole),
         ) { "South button binding references an unleased player slot" }
         require(maxLocalPeerMessageBytes in 1..64 * 1024) {
             "Invalid maximum local peer message size"
@@ -228,6 +229,7 @@ data class GameLaunch(
             southButtonBinding?.let { binding ->
                 destination.putExtra(SOUTH_BUTTON_PLAYER_SLOT, binding.playerSlot)
                 destination.putExtra(SOUTH_BUTTON_CONTROL, binding.controlId)
+                destination.putExtra(SOUTH_BUTTON_SURFACE_ROLE, binding.surfaceRole.wireValue)
             }
         }
 
@@ -252,6 +254,7 @@ data class GameLaunch(
         const val MAX_LOCAL_PEER_MESSAGE_BYTES = "max_local_peer_message_bytes"
         const val SOUTH_BUTTON_PLAYER_SLOT = "south_button_player_slot"
         const val SOUTH_BUTTON_CONTROL = "south_button_control"
+        const val SOUTH_BUTTON_SURFACE_ROLE = "south_button_surface_role"
         const val CONTENT_DIGEST = "content_digest"
         const val CAPABILITIES = "capabilities"
         const val MAIN_CONTROLLED_PLAYER_SLOTS = "main_controlled_player_slots"
@@ -328,6 +331,9 @@ data class GameLaunch(
                     SouthButtonBinding(
                         playerSlot = intent.getIntExtra(SOUTH_BUTTON_PLAYER_SLOT, -1),
                         controlId = control,
+                        surfaceRole = intent.getStringExtra(SOUTH_BUTTON_SURFACE_ROLE)?.let { role ->
+                            SurfaceRole.entries.firstOrNull { it.wireValue == role } ?: return null
+                        } ?: SurfaceRole.MAIN,
                     )
                 },
                 maxLocalSlots = intent.getIntExtra(MAX_LOCAL_SLOTS, 0),

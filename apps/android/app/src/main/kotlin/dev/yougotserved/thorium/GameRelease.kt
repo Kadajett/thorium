@@ -56,7 +56,10 @@ data class GameRelease(
     val maxPlayers: Int get() = manifest.players.maxSlots
     val maxLocalSlots: Int get() = manifest.players.maxLocalSlots
     val sameAccountMultipleSlots: Boolean get() = manifest.players.sameAccountMultipleSlots
+    val defaultLocalSeatPlan: Map<SurfaceRole, Set<Int>>?
+        get() = manifest.players.defaultLocalSeatPlan
     val multiplayerOnline: Boolean get() = manifest.multiplayer.online
+    val multiplayerRequiresOnline: Boolean get() = manifest.multiplayer.requiresOnline
     val controls: List<ReleaseControl> get() = manifest.controls
     val capabilities: List<String> get() = manifest.capabilities
     val maxPackageBytes: Long get() = manifest.budgets.maxPackageBytes

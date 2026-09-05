@@ -27,6 +27,8 @@ data class CatalogGame(
     val contentDigest: String,
     val release: GameRelease?,
     val capabilities: Set<String>,
+    val defaultLocalSeatPlan: Map<SurfaceRole, Set<Int>>? = null,
+    val multiplayerRequiresOnline: Boolean = false,
 )
 
 enum class CatalogActionState {
@@ -45,7 +47,13 @@ data class CatalogItem(
 object CatalogBindings {
     fun southButton(release: GameRelease): SouthButtonBinding? = release.controls
         .firstOrNull { control -> control.kind == "button" }
-        ?.let { control -> SouthButtonBinding(playerSlot = 0, controlId = control.id) }
+        ?.let { control ->
+            val role = release.defaultLocalSeatPlan?.entries
+                ?.singleOrNull { (_, slots) -> 0 in slots }
+                ?.key
+                ?: SurfaceRole.MAIN
+            SouthButtonBinding(playerSlot = 0, controlId = control.id, surfaceRole = role)
+        }
 }
 
 fun GameRelease.toCatalogGame(): CatalogGame = CatalogGame(
@@ -75,6 +83,8 @@ fun GameRelease.toCatalogGame(): CatalogGame = CatalogGame(
     contentDigest = contentDigest,
     release = this,
     capabilities = capabilities.toSet(),
+    defaultLocalSeatPlan = defaultLocalSeatPlan,
+    multiplayerRequiresOnline = multiplayerRequiresOnline,
 )
 
 object CatalogItemPolicy {

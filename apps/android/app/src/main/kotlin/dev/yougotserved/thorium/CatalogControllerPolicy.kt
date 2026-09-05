@@ -30,6 +30,8 @@ enum class CatalogControllerCommand {
 object CatalogAndroidKeyPolicy {
     fun recognizes(keyCode: Int): Boolean = keyCode in KEY_COMMANDS
 
+    fun usesFrameworkFocusTraversal(keyCode: Int): Boolean = keyCode in DPAD_KEYS
+
     fun command(keyCode: Int, action: Int, repeatCount: Int): CatalogControllerCommand? {
         if (action != AndroidCatalogKeyAction.DOWN || repeatCount < 0) return null
         val command = KEY_COMMANDS[keyCode] ?: return null
@@ -54,6 +56,13 @@ object CatalogAndroidKeyPolicy {
         AndroidCatalogKeyCode.BUTTON_X to CatalogControllerCommand.SEARCH,
         AndroidCatalogKeyCode.BUTTON_Y to CatalogControllerCommand.REFRESH,
         AndroidCatalogKeyCode.BUTTON_B to CatalogControllerCommand.BACK_OR_CLEAR,
+    )
+
+    private val DPAD_KEYS = setOf(
+        AndroidCatalogKeyCode.DPAD_UP,
+        AndroidCatalogKeyCode.DPAD_DOWN,
+        AndroidCatalogKeyCode.DPAD_LEFT,
+        AndroidCatalogKeyCode.DPAD_RIGHT,
     )
 }
 

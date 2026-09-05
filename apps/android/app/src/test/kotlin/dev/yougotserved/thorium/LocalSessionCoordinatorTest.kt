@@ -53,6 +53,41 @@ class LocalSessionCoordinatorTest {
     }
 
     @Test
+    fun routesTheSouthButtonToTheReleaseAuthoredCompanionSeatOwner() {
+        val launch = launch("companion-controller-routing").copy(
+            southButtonBinding = SouthButtonBinding(
+                playerSlot = 0,
+                controlId = "tap",
+                surfaceRole = SurfaceRole.COMPANION,
+            ),
+            maxLocalSlots = 1,
+            localPlayerSlots = setOf(0),
+            controlledPlayerSlots = mapOf(
+                SurfaceRole.MAIN to emptySet(),
+                SurfaceRole.COMPANION to setOf(0),
+            ),
+        )
+        val main = RecordingEndpoint()
+        val companion = RecordingEndpoint()
+        LocalSessionCoordinator.register(launch, SurfaceRole.MAIN, main)
+        LocalSessionCoordinator.register(launch, SurfaceRole.COMPANION, companion)
+        try {
+            assertTrue(
+                LocalSessionCoordinator.handleSouthButton(
+                    launch,
+                    SurfaceRole.MAIN,
+                    ControllerKeyInput(ControllerKeyPhase.DOWN, 0),
+                ),
+            )
+            assertTrue(main.messages.isEmpty())
+            assertEquals(1, companion.messages.size)
+        } finally {
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.MAIN, main)
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.COMPANION, companion)
+        }
+    }
+
+    @Test
     fun terminatingASessionNotifiesEveryRemainingSurfaceAndRemovesRouting() {
         val launch = launch("terminate-session")
         val main = RecordingEndpoint()

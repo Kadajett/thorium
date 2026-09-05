@@ -41,6 +41,8 @@ class GamePackageInstallerTest {
             installedRecord.sameAccountMultipleSlots,
         )
         assertEquals(fixture.release.multiplayerOnline, installedRecord.multiplayerOnline)
+        assertEquals(fixture.release.multiplayerRequiresOnline, installedRecord.multiplayerRequiresOnline)
+        assertEquals(fixture.release.defaultLocalSeatPlan, installedRecord.defaultLocalSeatPlan)
         assertEquals(fixture.release.maxLocalSlots, installedRecord.maxLocalSlots)
         assertEquals(
             fixture.release.maxLocalPeerMessageBytes,
@@ -127,6 +129,8 @@ class GamePackageInstallerTest {
         assertEquals(release.maxPlayers, current.maxPlayers)
         assertEquals(release.sameAccountMultipleSlots, current.sameAccountMultipleSlots)
         assertEquals(release.multiplayerOnline, current.multiplayerOnline)
+        assertEquals(release.multiplayerRequiresOnline, current.multiplayerRequiresOnline)
+        assertEquals(release.defaultLocalSeatPlan, current.defaultLocalSeatPlan)
         assertEquals(current.maxLocalSlots > 1, legacy.sameAccountMultipleSlots)
         assertEquals("colyseus-session" in current.capabilities, legacy.multiplayerOnline)
         assertEquals(current.sameAccountMultipleSlots, current.toCatalogGame().sameAccountMultipleSlots)
@@ -148,6 +152,7 @@ class GamePackageInstallerTest {
             "maxLocalSlots",
             "sameAccountMultipleSlots",
             "multiplayerOnline",
+            "multiplayerRequiresOnline",
             "maxLocalPeerMessageBytes",
             "capabilities",
         ).forEach { field ->

@@ -59,7 +59,8 @@ object LocalSessionCoordinator {
         val delivery = synchronized(this) {
             val state = sessions[key(launch)] ?: return false
             if (state.endpoints[focusedSurface] == null) return false
-            val destination = state.endpoints[SurfaceRole.MAIN] ?: return false
+            val targetRole = state.southButtonBinding?.surfaceRole ?: return false
+            val destination = state.endpoints[targetRole] ?: return false
             state.controllerInput.acceptSouth(input) to destination
         }
         val decision = delivery.first

@@ -144,8 +144,28 @@ object TestPackages {
                     .put("main", JSONObject().put("logicalWidth", 960).put("logicalHeight", 540).put("maximumDevicePixelRatio", 1.5))
                     .put("companion", JSONObject().put("logicalWidth", 960).put("logicalHeight", 540).put("maximumDevicePixelRatio", 2.25)),
             )
-            .put("players", JSONObject().put("minSlots", 2).put("maxSlots", 2).put("maxLocalSlots", 2).put("sameAccountMultipleSlots", true))
-            .put("multiplayer", JSONObject().put("online", false).put("roomName", "game_session").put("protocol", "thorium-game-channel-v1"))
+            .put(
+                "players",
+                JSONObject()
+                    .put("minSlots", 2)
+                    .put("maxSlots", 2)
+                    .put("maxLocalSlots", 2)
+                    .put("sameAccountMultipleSlots", true)
+                    .put(
+                        "defaultLocalSeatPlan",
+                        JSONObject()
+                            .put("main", JSONArray().put(0))
+                            .put("companion", JSONArray().put(1)),
+                    ),
+            )
+            .put(
+                "multiplayer",
+                JSONObject()
+                    .put("online", false)
+                    .put("requiresOnline", false)
+                    .put("roomName", "game_session")
+                    .put("protocol", "thorium-game-channel-v1"),
+            )
             .put("controls", JSONArray().put(JSONObject().put("id", "tap").put("label", "Tap").put("kind", "button")))
             .put("capabilities", JSONArray().put("same-device-peer").put("colyseus-session"))
             .put("budgets", JSONObject().put("maxPackageBytes", 1024 * 1024).put("maxFileCount", 8).put("maxLocalPeerMessageBytes", 4096))
