@@ -51,6 +51,7 @@ class WebSurface private constructor(
     }
 
     private fun onRendererGone() {
+        AndroidHostTrace.lifecycle(activity, role.name.lowercase(), "renderer-gone")
         teardown(notifyGame = false)
     }
 
@@ -108,6 +109,7 @@ class WebSurface private constructor(
             )
             HostAction.Ready -> {
                 ready = true
+                AndroidHostTrace.lifecycle(activity, role.name.lowercase(), "web-ready active=$resumed")
                 while (pendingMessages.isNotEmpty()) post(pendingMessages.removeFirst())
                 if (resumed) post(lifecycleMessage("active"))
             }

@@ -121,9 +121,9 @@ jobs:
 
           This APK is signed with Thorium's stable developer-only debug key. It is not production-signed, is not a Play Store release, and is intended only for sideload testing. Builds from android-v0.1.0-dev.5 onward can be installed over one another; older runner-signed builds must be uninstalled once first.
 
-          dev.6 fixes the dual-screen host lifecycle so a still-visible top game surface keeps rendering when the bottom-screen companion takes input focus. True suspension now follows Activity visibility (onStop) instead of focus loss (onPause). This directly targets the frozen Cinder top screen and Serpent's black top screen reported on physical Thor hardware.
+          dev.7 separates the main and companion game surfaces into reusable Android tasks on their assigned displays. This targets the physical Thor failure where opening the lower companion stopped the upper game Activity; physical confirmation is still required. The prior lifecycle correction remains in place, so a visible but unfocused surface continues rendering.
 
-          The controller-first native game library remains D-pad and analog-stick navigable: A installs/plays, X explicitly enters Search, Y syncs, and B clears/goes back. Games remain server-published packages rather than APK-bundled content, and online games connect through Thorium's single shared game host.
+          The native library now routes D-pad and analog-stick movement through an explicit catalog selection model instead of framework focus traversal. A or D-pad center opens the selected target, X enters Search, Y syncs, and B clears/goes back. Game surfaces consume currently unbound joystick motion before WebView can highlight the whole page. Games remain server-published packages rather than APK-bundled content, and online games connect through Thorium's single shared game host.
 
           Thorium is heavily AI-assisted and human-directed and reviewed: the architecture, product decisions, constraints, testing, and acceptance remain under human control. See the repository's [AI-assisted development](https://github.com/$GITHUB_REPOSITORY#ai-assisted-development) disclosure.
           EOF

@@ -51,6 +51,10 @@ object LocalSessionCoordinator {
         endpoints.forEach(Endpoint::terminateGameSession)
     }
 
+    fun onSurfaceDestroyed(launch: GameLaunch, role: SurfaceRole, isFinishing: Boolean) {
+        if (role == SurfaceRole.MAIN && isFinishing) terminate(launch)
+    }
+
     fun handleSouthButton(
         launch: GameLaunch,
         focusedSurface: SurfaceRole,

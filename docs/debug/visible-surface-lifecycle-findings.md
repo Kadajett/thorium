@@ -3,6 +3,11 @@
 Scope: Android host and the shared SDK. A host visibility-lifecycle correction
 was implemented after the diagnostic replay and native regression went red.
 
+Physical dev.6 follow-up: a full close/reopen still left Serpent black. The
+correction below was therefore insufficient for the device symptom. See
+[the controller and task-placement follow-up](android-input-placement-findings.md)
+for the separate-task correction and the trace needed to verify native behavior.
+
 ## Runnable evidence
 
 `node docs/debug/visible-surface-lifecycle-replay.mjs --expect-visible-progress`

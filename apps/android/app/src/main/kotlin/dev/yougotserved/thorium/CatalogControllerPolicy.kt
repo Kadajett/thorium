@@ -7,6 +7,7 @@ object AndroidCatalogKeyCode {
     const val DPAD_DOWN = 20
     const val DPAD_LEFT = 21
     const val DPAD_RIGHT = 22
+    const val DPAD_CENTER = 23
     const val BUTTON_A = 96
     const val BUTTON_B = 97
     const val BUTTON_X = 99
@@ -32,8 +33,6 @@ enum class CatalogControllerCommand {
 object CatalogAndroidKeyPolicy {
     fun recognizes(keyCode: Int): Boolean = keyCode in KEY_COMMANDS
 
-    fun usesFrameworkFocusTraversal(keyCode: Int): Boolean = keyCode in DPAD_KEYS
-
     fun command(keyCode: Int, action: Int, repeatCount: Int): CatalogControllerCommand? {
         if (action != AndroidCatalogKeyAction.DOWN || repeatCount < 0) return null
         val command = KEY_COMMANDS[keyCode] ?: return null
@@ -54,18 +53,13 @@ object CatalogAndroidKeyPolicy {
         AndroidCatalogKeyCode.DPAD_DOWN to CatalogControllerCommand.MOVE_DOWN,
         AndroidCatalogKeyCode.DPAD_LEFT to CatalogControllerCommand.MOVE_LEFT,
         AndroidCatalogKeyCode.DPAD_RIGHT to CatalogControllerCommand.MOVE_RIGHT,
+        AndroidCatalogKeyCode.DPAD_CENTER to CatalogControllerCommand.ACTIVATE,
         AndroidCatalogKeyCode.BUTTON_A to CatalogControllerCommand.ACTIVATE,
         AndroidCatalogKeyCode.BUTTON_X to CatalogControllerCommand.SEARCH,
         AndroidCatalogKeyCode.BUTTON_Y to CatalogControllerCommand.REFRESH,
         AndroidCatalogKeyCode.BUTTON_B to CatalogControllerCommand.BACK_OR_CLEAR,
     )
 
-    private val DPAD_KEYS = setOf(
-        AndroidCatalogKeyCode.DPAD_UP,
-        AndroidCatalogKeyCode.DPAD_DOWN,
-        AndroidCatalogKeyCode.DPAD_LEFT,
-        AndroidCatalogKeyCode.DPAD_RIGHT,
-    )
 }
 
 class CatalogStickNavigator(

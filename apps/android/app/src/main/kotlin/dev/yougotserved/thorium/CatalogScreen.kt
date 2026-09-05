@@ -33,16 +33,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -72,7 +73,6 @@ fun CatalogScreen(
     var query by remember { mutableStateOf("") }
     var focus by remember { mutableStateOf(CatalogFocus()) }
     var searchEditing by remember { mutableStateOf(false) }
-    var initialFocusRequested by remember { mutableStateOf(false) }
     val searchTileFocusRequester = remember { FocusRequester() }
     val searchInputFocusRequester = remember { FocusRequester() }
     val refreshFocusRequester = remember { FocusRequester() }
@@ -89,7 +89,7 @@ fun CatalogScreen(
     val currentOnAction by rememberUpdatedState(onAction)
     val currentOnSearch by rememberUpdatedState(onSearch)
     val currentOnBack by rememberUpdatedState(onBack)
-    val focusManager = LocalFocusManager.current
+    val inputModeManager = LocalInputModeManager.current
 
     BoxWithConstraints(
         modifier = Modifier
@@ -104,35 +104,47 @@ fun CatalogScreen(
         val availableWidth = maxWidth - 28.dp
         val columnCount = ((availableWidth.value + gridSpacing.value) /
             (MINIMUM_CARD_WIDTH.value + gridSpacing.value)).toInt().coerceAtLeast(1)
+        val currentColumnCount by rememberUpdatedState(columnCount)
         val searchWidth = (maxWidth * 0.30f).coerceIn(168.dp, 250.dp)
 
         LaunchedEffect(matches.size) {
             focus = CatalogFocusPolicy.normalized(focus, matches.size)
         }
-        LaunchedEffect(cardFocusRequesters, searchEditing) {
-            if (!initialFocusRequested && !searchEditing && cardFocusRequesters.isNotEmpty()) {
-                cardFocusRequesters.first().requestFocus()
-                initialFocusRequested = true
-            }
-        }
         LaunchedEffect(searchEditing) {
             if (searchEditing) {
                 searchInputFocusRequester.requestFocus()
-            } else if (initialFocusRequested && focus.target == CatalogFocusTarget.SEARCH) {
-                searchTileFocusRequester.requestFocus()
+            }
+        }
+        LaunchedEffect(focus, cardFocusRequesters, searchEditing) {
+            if (searchEditing) return@LaunchedEffect
+            when (focus.target) {
+                CatalogFocusTarget.CARD -> {
+                    val requester = cardFocusRequesters.getOrNull(focus.cardIndex)
+                        ?: return@LaunchedEffect
+                    if (gridState.layoutInfo.visibleItemsInfo.none { it.index == focus.cardIndex }) {
+                        gridState.scrollToItem(focus.cardIndex)
+                    }
+                    // An off-screen lazy item must be composed before requesting its focus.
+                    withFrameNanos { }
+                    requester.requestFocus()
+                }
+                CatalogFocusTarget.SEARCH -> searchTileFocusRequester.requestFocus()
+                CatalogFocusTarget.REFRESH -> refreshFocusRequester.requestFocus()
             }
         }
         LaunchedEffect(controllerCommands) {
             controllerCommands.collect { command ->
+                inputModeManager.requestInputMode(InputMode.Keyboard)
                 when (command) {
                     CatalogControllerCommand.MOVE_UP,
-                    -> if (!searchEditing) focusManager.moveFocus(FocusDirection.Up)
-                    CatalogControllerCommand.MOVE_DOWN ->
-                        if (!searchEditing) focusManager.moveFocus(FocusDirection.Down)
-                    CatalogControllerCommand.MOVE_LEFT ->
-                        if (!searchEditing) focusManager.moveFocus(FocusDirection.Left)
-                    CatalogControllerCommand.MOVE_RIGHT ->
-                        if (!searchEditing) focusManager.moveFocus(FocusDirection.Right)
+                    CatalogControllerCommand.MOVE_DOWN,
+                    CatalogControllerCommand.MOVE_LEFT,
+                    CatalogControllerCommand.MOVE_RIGHT,
+                    -> if (!searchEditing) {
+                        focus = CatalogFocusPolicy.move(
+                            focus, command, currentMatches.size, currentColumnCount,
+                        )
+                    }
                     CatalogControllerCommand.ACTIVATE -> when (
                         CatalogFocusPolicy.activation(focus, currentMatches.size)
                     ) {

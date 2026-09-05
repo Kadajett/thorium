@@ -103,6 +103,45 @@ class LocalSessionCoordinatorTest {
         assertTrue(companion.messages.isEmpty())
     }
 
+    @Test
+    fun finishingMainClosesItsCompanionTaskAndRemovesRouting() {
+        val launch = launch("main-finished")
+        val main = RecordingEndpoint()
+        val companion = RecordingEndpoint()
+        LocalSessionCoordinator.register(launch, SurfaceRole.MAIN, main)
+        LocalSessionCoordinator.register(launch, SurfaceRole.COMPANION, companion)
+        try {
+            LocalSessionCoordinator.onSurfaceDestroyed(launch, SurfaceRole.MAIN, isFinishing = true)
+            LocalSessionCoordinator.onSurfaceDestroyed(launch, SurfaceRole.MAIN, isFinishing = true)
+            LocalSessionCoordinator.route(launch, SurfaceRole.MAIN, "stale-peer")
+            assertEquals(1, companion.terminations)
+            assertEquals(1, main.terminations)
+            assertTrue(companion.messages.isEmpty())
+        } finally {
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.MAIN, main)
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.COMPANION, companion)
+        }
+    }
+
+    @Test
+    fun recreatingMainDoesNotTerminateTheLiveSessionOrItsCompanion() {
+        val launch = launch("main-recreated")
+        val main = RecordingEndpoint()
+        val companion = RecordingEndpoint()
+        LocalSessionCoordinator.register(launch, SurfaceRole.MAIN, main)
+        LocalSessionCoordinator.register(launch, SurfaceRole.COMPANION, companion)
+        try {
+            LocalSessionCoordinator.onSurfaceDestroyed(launch, SurfaceRole.MAIN, isFinishing = false)
+            LocalSessionCoordinator.route(launch, SurfaceRole.MAIN, "live-peer")
+            assertEquals(0, main.terminations)
+            assertEquals(0, companion.terminations)
+            assertEquals(listOf("live-peer"), companion.messages)
+        } finally {
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.MAIN, main)
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.COMPANION, companion)
+        }
+    }
+
     private fun launch(sessionId: String): GameLaunch = GameLaunch(
         packageId = "dev.yougotserved.tap-race",
         version = "0.1.0",

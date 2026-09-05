@@ -16,7 +16,8 @@ object DisplayLauncher {
     fun launchCompanion(activity: Activity, launch: GameLaunch): Boolean {
         if (!supportsSecondaryActivities(activity)) return false
         val intent = launch.putInto(
-            Intent(activity, CompanionGameActivity::class.java),
+            Intent(activity, CompanionGameActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             includedSessionCapabilities = setOf(SurfaceRole.COMPANION),
         )
         val currentId = activityDisplayId(activity)
@@ -24,6 +25,7 @@ object DisplayLauncher {
             ?: return false
         intent.putExtra(GameLaunch.EXPECTED_DISPLAY_ID, target.id)
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(target.id)
+        AndroidHostTrace.lifecycle(activity, "main", "launch-companion target=${target.id}")
         return runCatching { activity.startActivity(intent, options.toBundle()) }
             .onFailure { error -> Log.e(TAG, "Companion launch failed on ${target.id}", error) }
             .isSuccess

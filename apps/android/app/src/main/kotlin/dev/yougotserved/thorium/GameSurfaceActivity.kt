@@ -7,6 +7,7 @@ import android.os.Build
 import android.util.Log
 import android.view.View
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 
@@ -19,14 +20,17 @@ abstract class GameSurfaceActivity : Activity() {
         resumeSurface = { surface?.onResume() },
         pauseSurface = { surface?.onPause() },
     )
+    private var lastMotionTraceAtMillis = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        trace("create")
         install(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        trace("new-intent")
         setIntent(intent)
         surface?.destroy()
         surface = null
@@ -36,30 +40,38 @@ abstract class GameSurfaceActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        trace("start")
         surfaceLifecycle.onStart()
     }
 
     override fun onResume() {
         super.onResume()
+        trace("resume")
         surfaceLifecycle.onResume()
     }
 
     override fun onPause() {
+        trace("pause")
         surfaceLifecycle.onPause()
         super.onPause()
     }
 
     override fun onStop() {
+        trace("stop")
         surfaceLifecycle.onStop()
         super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        trace("focus=$hasFocus")
         if (hasFocus) enterImmersiveMode()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (CatalogAndroidKeyPolicy.recognizes(event.keyCode)) {
+            AndroidHostTrace.key(this, surfaceRole.name.lowercase(), event)
+        }
         val launch = gameLaunch
         if (launch != null) {
             val input = AndroidControllerInput.translate(
@@ -78,7 +90,24 @@ abstract class GameSurfaceActivity : Activity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (!GamepadMotionPolicy.recognizes(event.source, event.action)) {
+            return super.dispatchGenericMotionEvent(event)
+        }
+        if (event.eventTime - lastMotionTraceAtMillis >= 1000) {
+            AndroidHostTrace.motion(this, surfaceRole.name.lowercase(), event)
+            lastMotionTraceAtMillis = event.eventTime
+        }
+        // No release-authored native axis bindings exist yet. Do not let unbound
+        // joystick/hat events trigger WebView's page-wide spatial-focus fallback.
+        return true
+    }
+
     override fun onDestroy() {
+        trace("destroy finishing=$isFinishing")
+        gameLaunch?.let {
+            LocalSessionCoordinator.onSurfaceDestroyed(it, surfaceRole, isFinishing)
+        }
         surface?.destroy()
         surface = null
         gameLaunch = null
@@ -86,6 +115,9 @@ abstract class GameSurfaceActivity : Activity() {
     }
 
     protected open fun isLaunchPlacementValid(intent: Intent): Boolean = true
+
+    private fun trace(event: String) =
+        AndroidHostTrace.lifecycle(this, surfaceRole.name.lowercase(), event)
 
     private fun install(intent: Intent) {
         val launch = GameLaunch.from(intent)

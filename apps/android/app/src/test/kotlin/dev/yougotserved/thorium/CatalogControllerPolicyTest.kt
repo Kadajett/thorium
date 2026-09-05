@@ -14,14 +14,13 @@ class CatalogControllerPolicyTest {
         assertEquals(CatalogControllerCommand.MOVE_LEFT, keyDown(AndroidCatalogKeyCode.DPAD_LEFT))
         assertEquals(CatalogControllerCommand.MOVE_RIGHT, keyDown(AndroidCatalogKeyCode.DPAD_RIGHT))
         assertEquals(CatalogControllerCommand.ACTIVATE, keyDown(AndroidCatalogKeyCode.BUTTON_A))
+        assertEquals(CatalogControllerCommand.ACTIVATE, keyDown(AndroidCatalogKeyCode.DPAD_CENTER))
         assertEquals(CatalogControllerCommand.SEARCH, keyDown(AndroidCatalogKeyCode.BUTTON_X))
         assertEquals(CatalogControllerCommand.REFRESH, keyDown(AndroidCatalogKeyCode.BUTTON_Y))
         assertEquals(CatalogControllerCommand.BACK_OR_CLEAR, keyDown(AndroidCatalogKeyCode.BUTTON_B))
 
         assertTrue(CatalogAndroidKeyPolicy.recognizes(AndroidCatalogKeyCode.DPAD_UP))
         assertTrue(CatalogAndroidKeyPolicy.recognizes(AndroidCatalogKeyCode.BUTTON_A))
-        assertTrue(CatalogAndroidKeyPolicy.usesFrameworkFocusTraversal(AndroidCatalogKeyCode.DPAD_UP))
-        assertFalse(CatalogAndroidKeyPolicy.usesFrameworkFocusTraversal(AndroidCatalogKeyCode.BUTTON_A))
         assertFalse(CatalogAndroidKeyPolicy.recognizes(24))
     }
 
