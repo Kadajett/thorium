@@ -2,7 +2,7 @@
 
 Work in vertical slices. Each slice ends in an observable behavior, not only a layer or schema.
 
-Status reflects repository evidence as of 2026-09-04. “Implemented” means source exists; checklist items say where automated coverage also exists. It does not mean deployed, signed, or validated on physical Thor hardware.
+Status reflects repository and deployment evidence as of 2026-09-05. “Implemented” means source exists; checklist items distinguish automated, deployed, and physical-device evidence. Physical Thor acceptance remains open after the reported dev.6 failures; dev.7 and Serpent 0.1.2 are available for retest.
 
 ## Slice 1: Local platform contract
 
@@ -19,9 +19,9 @@ Exit gate:
 
 ## Slice 2: Native launcher
 
-Status: partially implemented in Android source; Android SDK/emulator and physical-device gates remain open.
+Status: implemented with JVM tests, lint, and APK build gates passing. Emulator and physical-device gates remain open.
 
-Deliver the Compose catalog/search/install shell and adapt ThorUI's two-Activity display launcher. The current launcher includes a bundled fallback plus an HTTPS remote catalog/download path; it does not include a separate detail screen.
+Deliver the Compose catalog/search/install shell and adapt ThorUI's two-Activity display launcher. The launcher uses the HTTPS catalog and verified cached installs; games are not bundled in the APK. It does not include a separate detail screen.
 
 Exit gate:
 
@@ -38,7 +38,7 @@ Add immutable descriptors, archive/digest verification, atomic install, origin-s
 
 Exit gate:
 
-- [ ] a deployed package changes the production catalog without an APK update;
+- [x] a deployed package changes the production catalog without an APK update (Serpent 0.1.2 replaced 0.1.1 on the public endpoint);
 - [x] packer, HTTP service, and Android catalog parser have automated rejection coverage for their integrity and path boundaries;
 - [x] the Android installer implements archive, entry, size, manifest, and per-file verification plus atomic promotion;
 - [x] schema-2 installed records retain the integrity envelope and Android re-hashes manifest/runtime bytes before creating any Game Session; schema-1 installs fail closed until reinstalled;
@@ -72,7 +72,14 @@ Exit gate:
 
 ## Slice 5: Thor performance and controls
 
-Status: one semantic south/A-button policy exists in Android source with unit-test coverage; the physical-device slice remains open.
+Status: dev.7 uses explicit launcher selection for D-pad and stick, but in-game
+native input still infers A from the first declared button and targets slot 0.
+Cinder therefore has one of seven declared buttons natively mapped; Serpent has
+one of three buttons and neither axis. Its idle companion input snapshots also
+overwrite native holds. The next controller slice must add release-authored
+physical mappings, device-to-slot assignment, fractional axis routing, and
+browser/native input ownership together with the game consumers. The physical
+device slice remains open.
 
 Port the successful ThorUI controller behavior to the TypeScript SDK and native Compose navigation. Capture the exact device/firmware/controller profile. Measure two-WebView cold start, memory, 120/60 presentation, input latency, and sustained thermals on the Snapdragon 865 model.
 
@@ -86,7 +93,7 @@ Exit gate:
 
 ## Slice 6: Deployment
 
-Status: future. A Dockerfile and local artifact interface exist, but no production deployment is claimed.
+Status: public platform and shared game host deployed through the Thorium Pulumi programs in `kadajett-infrastructure`. Public package checks and Serpent's two-account movement/handoff proof pass. Clean-checkout reproduction and rollback exercises remain open.
 
 Build and publish the platform container and game artifacts. Add isolated Thorium Pulumi programs to `kadajett-infrastructure`, then expose the catalog/Colyseus endpoint and package CDN on new `yougotserved.dev` hostnames.
 
@@ -94,27 +101,30 @@ Exit gate:
 
 - [ ] deployment is reproducible from clean checkouts;
 - [ ] TLS HTTP, WebSocket upgrade, health checks, persistence, and rollback are verified externally;
-- [ ] infrastructure previews and tests cover all new resources;
-- [ ] deployment uses managed secrets and no credential or signing key is committed.
+- [x] infrastructure previews and tests cover all new resources (infrastructure commit `3b4ee10`; workload 28 unchanged and edge 7 unchanged after deployment);
+- [x] deployment uses managed secrets and no credential or signing key is committed (module signing occurs inside the operator Job; APK signing uses GitHub secrets).
 
 ## Slice 7: Signed APK and first-party lane
 
-Status: future and unverified. There is no signed release, physical Thor release gate, or Bevy lane in this repository.
+Status: developer-signed dev.7 is published on GitHub with a stable certificate and increasing versionCode. Production signing, physical Thor acceptance, and the optional Bevy lane remain unverified or unimplemented.
 
 Produce a signed release APK, verified App Link, update path, crash reporting, and rollback. Add a Bevy-based trusted first-party sample only after the platform lane is stable and its binary/runtime budget is measured.
 
 Exit gate:
 
-- [ ] clean build produces a signed APK and checksum;
+- [x] clean CI build produces a developer-signed APK and checksum ([dev.7 build](https://github.com/Kadajett/thorium/actions/runs/33940092088)); production signing remains open;
 - [ ] release installs and launches both surfaces on physical Thor hardware;
 - [ ] remote catalog/package updates work without APK updates in a deployed environment;
 - [ ] the trusted first-party Bevy lane is implemented, measured, APK-bundled, and unable to load downloaded native executable code.
 
 ## Slice 8: First public games
 
-Status: required product acceptance work; implementation begins after the shared
-runtime is deployed on a new Thorium `yougotserved.dev` hostname. Tap Race remains
-an integration fixture and does not count as either public launch game.
+Status: Cinder Circuit 0.1.0 and Serpent World 0.1.2 are downloadable at
+`games.yougotserved.dev` and run in the shared host at `/play`. Their separate
+source repositories live under `../thorium-games`. Serpent's public two-account
+movement and fenced shard handoff proof passes. Both games render in Chromium;
+physical Thor behavior, full controller mapping, reconnect, and load acceptance
+remain open. Tap Race remains an integration fixture.
 
 Build the first two catalog games in parallel on the deployed platform:
 

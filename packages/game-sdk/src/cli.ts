@@ -4,13 +4,16 @@ import path from "node:path";
 import { canonicalJson } from "./descriptor.js";
 import { loadGamePackage, packGamePackage } from "./pack.js";
 import { startPreviewServer } from "./preview-server.js";
+import { publishGame } from "./publish.js";
 
 function usage(): never {
   console.error(
       "Usage:\n" +
       "  thorium-game validate <thorium.json> [--out <descriptor.json>]\n" +
       "  thorium-game pack <thorium.json> [--archive <game.zip>] [--descriptor <descriptor.json>]\n" +
-      "  thorium-game serve <thorium.json> [--port <port>]",
+      "  thorium-game serve <thorium.json> [--port <port>]\n" +
+      "  thorium-game publish <thorium.json> --platform <https://host>\n" +
+      "    Reads the scoped token from THORIUM_PUBLISH_TOKEN.",
   );
   process.exit(2);
 }
@@ -37,7 +40,7 @@ async function writeOutput(outputPath: string, bytes: string | Uint8Array): Prom
 
 async function main(): Promise<void> {
   const [command, manifestArgument, ...rest] = process.argv.slice(2);
-  if ((command !== "validate" && command !== "pack" && command !== "serve") || !manifestArgument) {
+  if (!["validate", "pack", "serve", "publish"].includes(command ?? "") || !manifestArgument) {
     usage();
   }
   if (path.basename(manifestArgument) !== "thorium.json") {
@@ -45,6 +48,18 @@ async function main(): Promise<void> {
   }
 
   const absoluteManifest = path.resolve(manifestArgument);
+
+  if (command === "publish") {
+    rejectUnknownOptions(rest, ["--platform"]);
+    const platformUrl = option(rest, "--platform");
+    if (!platformUrl) usage();
+    const receipt = await publishGame(absoluteManifest, {
+      platformUrl,
+      token: process.env.THORIUM_PUBLISH_TOKEN ?? "",
+    });
+    process.stdout.write(`${JSON.stringify(receipt)}\n`);
+    return;
+  }
 
   if (command === "serve") {
     rejectUnknownOptions(rest, ["--port"]);

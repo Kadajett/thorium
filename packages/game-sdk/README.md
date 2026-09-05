@@ -63,6 +63,41 @@ node dist/cli.js pack path/to/thorium.json \
 
 Packing walks each declared filesystem path, rejects traversal, symlinks, and non-regular files, fixes ZIP metadata, and sorts entries. `maxFileCount` includes `thorium.json`; `maxPackageBytes` is enforced against both real input bytes and the final ZIP. The descriptor records the exact archive SHA-256 and byte size.
 
+## Publish to the catalog
+
+Build your game's browser files first, then publish directly from its manifest:
+
+```sh
+read -r -s -p 'Publisher token: ' THORIUM_PUBLISH_TOKEN; echo
+export THORIUM_PUBLISH_TOKEN
+thorium-game publish path/to/thorium.json --platform https://games.yougotserved.dev
+unset THORIUM_PUBLISH_TOKEN
+```
+
+The token prompt above uses Bash. An agent can instead receive the scoped token
+through its environment. Obtain that token using the platform's
+[Basic credential exchange](../../../services/platform/README.md#self-service-game-release-publishing).
+Keep the Basic password with the publisher; give the agent only the returned token.
+With a source checkout, use `node packages/game-sdk/dist/cli.js` in place of
+`thorium-game` after building the SDK.
+
+The command validates and packs the current files, uploads their descriptor and
+ZIP together, and verifies the server receipt against the exact local content
+digest. It prints a JSON receipt suitable for an agent or script. It does not
+write a token or intermediate archive into the game directory. The platform URL
+must be an HTTPS origin; upload redirects are refused. Credentials never appear
+in CLI arguments or output.
+
+An unchanged retry returns `already-published`. If a network timeout leaves the
+outcome uncertain, retry the unchanged files. For a content change, increment the
+manifest version and rebuild first: published versions are immutable. Sync the
+Android catalog to discover the new release; the APK does not need rebuilding.
+
+This command accepts the self-service web client lane. Games that declare
+`multiplayer.requiresOnline: true` need an operator-deployed server module and
+are rejected before upload. Server modules for matchmaking or authoritative
+worlds run in the shared game host.
+
 ## Local dual-surface preview
 
 Build the SDK, then serve a validated Game Package manifest:
