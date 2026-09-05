@@ -15,6 +15,10 @@ abstract class GameSurfaceActivity : Activity() {
     protected var gameLaunch: GameLaunch? = null
         private set
     private var surface: WebSurface? = null
+    private val surfaceLifecycle = GameSurfaceLifecycle(
+        resumeSurface = { surface?.onResume() },
+        pauseSurface = { surface?.onPause() },
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,14 +34,24 @@ abstract class GameSurfaceActivity : Activity() {
         install(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        surfaceLifecycle.onStart()
+    }
+
     override fun onResume() {
         super.onResume()
-        surface?.onResume()
+        surfaceLifecycle.onResume()
     }
 
     override fun onPause() {
-        surface?.onPause()
+        surfaceLifecycle.onPause()
         super.onPause()
+    }
+
+    override fun onStop() {
+        surfaceLifecycle.onStop()
+        super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -89,6 +103,7 @@ abstract class GameSurfaceActivity : Activity() {
         gameLaunch = launch
         surface = created
         setContentView(created.view)
+        surfaceLifecycle.onSurfaceReplaced()
         enterImmersiveMode()
     }
 
