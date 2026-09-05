@@ -1,4 +1,5 @@
 import type { SemanticControl, SurfaceRole } from "./types.js";
+import { validateControllerBindings, type ControllerBindings } from "./controller-bindings.js";
 
 export interface WebEntrypoint {
   readonly path: string;
@@ -46,6 +47,7 @@ export interface WebGameManifest {
     readonly protocol: "thorium-game-channel-v1";
   };
   readonly controls: readonly SemanticControl[];
+  readonly controllerBindings?: ControllerBindings;
   readonly capabilities: readonly ("same-device-peer" | "colyseus-session")[];
   readonly budgets: {
     readonly maxPackageBytes: number;
@@ -274,6 +276,15 @@ export function validateManifest(input: unknown): WebGameManifest {
       }
     }
     if (new Set(ids).size !== ids.length) issues.push("control ids must be unique");
+  }
+
+  if (manifest.controllerBindings !== undefined) {
+    try {
+      validateControllerBindings(manifest.controllerBindings, Array.isArray(manifest.controls)
+        ? manifest.controls.filter(value => record(value) !== undefined) as SemanticControl[] : []);
+    } catch (error) {
+      issues.push(error instanceof Error ? error.message : "Invalid controllerBindings");
+    }
   }
 
   const allowedCapabilities = new Set(["same-device-peer", "colyseus-session"]);

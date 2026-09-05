@@ -9,7 +9,16 @@ import type {
   PackageArtifactPublicationStore,
 } from "../src/ports/package-artifact-publication-store.js";
 import { GameReleasePublisher } from "../src/publication/game-release-publisher.js";
-import { createTestGamePackageFixture } from "./test-game-package-fixture.js";
+import {
+  canonicalJson,
+  parseStoredGameRelease,
+  sha256,
+  verifyPublishedGameRelease,
+} from "../src/publication/verify-game-release.js";
+import {
+  createControllerBindingsTestGamePackageFixture,
+  createTestGamePackageFixture,
+} from "./test-game-package-fixture.js";
 
 class MemoryReleaseRepository implements GameReleasePublicationRepository {
   readonly releases = new Map<string, GameRelease>();
@@ -80,7 +89,73 @@ describe("GameReleasePublisher", () => {
     expect(result.release.bundle.url).toBe(
       "https://games.yougotserved.dev/v1/packages/dev.yougotserved.platform-fixture/1.2.3/dev.yougotserved.platform-fixture-1.2.3.zip",
     );
+    expect(result.release).not.toHaveProperty("controllerBindings");
     expect(releases.releases).toHaveLength(1);
     expect(artifacts.artifacts).toHaveLength(1);
+  });
+
+  it("preserves release-authored controller bindings through verification and catalog storage", async () => {
+    const releases = new MemoryReleaseRepository();
+    const artifacts = new MemoryArtifactPublicationStore();
+    const publisher = new GameReleasePublisher({
+      artifacts,
+      releases,
+      publicBaseUrl: "https://games.yougotserved.dev",
+      now: () => new Date("2026-09-04T20:00:00.000Z"),
+    });
+    const controllerBindings = {
+      schema: 1,
+      bindings: [
+        { kind: "button", input: "south", control: "confirm" },
+        { kind: "button", input: "east", control: "confirm" },
+        { kind: "axis", input: "right-x", control: "aim-x" },
+        { kind: "axis-button", input: "left-x", direction: -1, control: "move-left" },
+        { kind: "axis-button", input: "left-x", direction: 1, control: "move-right" },
+      ],
+    } as const;
+    const fixture = createControllerBindingsTestGamePackageFixture({
+      controls: [
+        { id: "confirm", label: "Confirm", kind: "button" },
+        { id: "aim-x", label: "Aim horizontally", kind: "axis" },
+        { id: "move-left", label: "Move left", kind: "button" },
+        { id: "move-right", label: "Move right", kind: "button" },
+      ],
+      controllerBindings,
+    });
+
+    const result = await publisher.publish({
+      descriptor: fixture.descriptor,
+      archive: {
+        fileName: fixture.artifact.key.fileName,
+        bytes: fixture.artifact.bytes,
+      },
+    });
+
+    expect(result.status).toBe("published");
+    expect(result.release.controllerBindings).toEqual(controllerBindings);
+    expect(result.release.contentDigest).toBe(sha256(canonicalJson(fixture.descriptor)));
+    const sameControlsWithoutBindings = createControllerBindingsTestGamePackageFixture({
+      controls: [
+        { id: "confirm", label: "Confirm", kind: "button" },
+        { id: "aim-x", label: "Aim horizontally", kind: "axis" },
+        { id: "move-left", label: "Move left", kind: "button" },
+        { id: "move-right", label: "Move right", kind: "button" },
+      ],
+      controllerBindings: undefined,
+    });
+    const legacyRelease = verifyPublishedGameRelease({
+      descriptor: sameControlsWithoutBindings.descriptor,
+      archive: {
+        fileName: sameControlsWithoutBindings.artifact.key.fileName,
+        bytes: sameControlsWithoutBindings.artifact.bytes,
+      },
+      publicBaseUrl: "https://games.yougotserved.dev",
+      publishedAt: "2026-09-04T20:00:00.000Z",
+    }).release;
+    expect(result.release.contentDigest).not.toBe(legacyRelease.contentDigest);
+    expect(legacyRelease).not.toHaveProperty("controllerBindings");
+    expect(releases.releases.values().next().value?.controllerBindings).toEqual(controllerBindings);
+    expect(parseStoredGameRelease(JSON.parse(JSON.stringify(result.release))).controllerBindings)
+      .toEqual(controllerBindings);
   });
 });

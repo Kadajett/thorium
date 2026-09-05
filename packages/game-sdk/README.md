@@ -44,6 +44,46 @@ The connector is a separate package subpath and is not re-exported by `@thorium/
 
 ## Package validation
 
+Games can declare physical controls through an optional immutable
+`controllerBindings` profile. Each binding names an existing semantic control;
+the host assigns controller devices to admitted local PlayerSlots and routes
+input to the surface owning that slot.
+
+```json
+{
+  "controllerBindings": {
+    "schema": 1,
+    "bindings": [
+      { "kind": "button", "input": "south", "control": "confirm" },
+      { "kind": "axis", "input": "left-x", "control": "steer-x" },
+      { "kind": "axis-button", "input": "left-y", "direction": -1, "control": "previous" }
+    ]
+  }
+}
+```
+
+Button inputs are `south`, `east`, `west`, `north`, `dpad-up`, `dpad-down`,
+`dpad-left`, `dpad-right`, `left-shoulder`, `right-shoulder`, `left-stick`,
+`right-stick`, `start`, and `select`. Axis inputs are `left-x`, `left-y`,
+`right-x`, `right-y`, `left-trigger`, and `right-trigger`. Stick axes range from
+-1 to 1; triggers range from 0 to 1. Axis-button directions are -1 or 1 and use
+press/release hysteresis at 0.6/0.35. The host applies a 0.15 deadzone in addition
+to hardware noise handling. Analog bindings reference axis controls; button
+and axis-button bindings reference button controls.
+
+A profile contains 1–64 bindings. One physical source may only have one mapping;
+an axis cannot simultaneously act as analog input and directional buttons.
+Multiple sources may hold the same semantic button, so releasing D-pad while
+holding the equivalent stick direction must keep that action held. Mappings
+contain no account IDs, device IDs, or player assignment.
+
+Check `context.host.bootstrap.controllerInput`: when it is `"native"`, consume
+`host.onControl` events and disable browser gamepad polling. Absent or `"browser"`
+allows preview/browser fallback. Touch still works in either mode. Keep touch
+and controller state separate so an idle touch update cannot cancel a held
+controller button or axis. Axis events use fractional values and the `changed`
+phase; returning to neutral delivers zero.
+
 Version 0.1 accepts JSON manifests:
 
 ```sh

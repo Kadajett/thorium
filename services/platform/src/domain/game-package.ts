@@ -17,6 +17,53 @@ export interface SemanticControl {
   readonly kind: "button" | "axis";
 }
 
+export type ControllerButtonInput =
+  | "south"
+  | "east"
+  | "west"
+  | "north"
+  | "dpad-up"
+  | "dpad-down"
+  | "dpad-left"
+  | "dpad-right"
+  | "left-shoulder"
+  | "right-shoulder"
+  | "left-stick"
+  | "right-stick"
+  | "start"
+  | "select";
+
+export type ControllerAxisInput =
+  | "left-x"
+  | "left-y"
+  | "right-x"
+  | "right-y"
+  | "left-trigger"
+  | "right-trigger";
+
+export type ControllerBinding =
+  | {
+    readonly kind: "button";
+    readonly input: ControllerButtonInput;
+    readonly control: string;
+  }
+  | {
+    readonly kind: "axis";
+    readonly input: ControllerAxisInput;
+    readonly control: string;
+  }
+  | {
+    readonly kind: "axis-button";
+    readonly input: ControllerAxisInput;
+    readonly direction: -1 | 1;
+    readonly control: string;
+  };
+
+export interface ControllerBindings {
+  readonly schema: 1;
+  readonly bindings: readonly ControllerBinding[];
+}
+
 export interface GamePackageFile {
   readonly path: string;
   readonly sha256: string;
@@ -68,6 +115,7 @@ export interface GameRelease {
     readonly protocol: "thorium-game-channel-v1";
   };
   readonly controls: readonly SemanticControl[];
+  readonly controllerBindings?: ControllerBindings;
   readonly capabilities: readonly ("same-device-peer" | "colyseus-session")[];
   readonly budgets: {
     readonly maxPackageBytes: number;

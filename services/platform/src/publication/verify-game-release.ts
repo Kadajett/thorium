@@ -16,6 +16,55 @@ const PACKAGE_PATH = z.string().max(1_024).refine((value) => {
 }, "must be a safe relative package path");
 const SurfaceRole = z.enum(["main", "companion"]);
 const Capability = z.enum(["same-device-peer", "colyseus-session"]);
+const ControlId = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+const ControllerButtonInput = z.enum([
+  "south",
+  "east",
+  "west",
+  "north",
+  "dpad-up",
+  "dpad-down",
+  "dpad-left",
+  "dpad-right",
+  "left-shoulder",
+  "right-shoulder",
+  "left-stick",
+  "right-stick",
+  "start",
+  "select",
+]);
+const ControllerAxisInput = z.enum([
+  "left-x",
+  "left-y",
+  "right-x",
+  "right-y",
+  "left-trigger",
+  "right-trigger",
+]);
+
+const ControllerBindingSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("button"),
+    input: ControllerButtonInput,
+    control: ControlId,
+  }),
+  z.strictObject({
+    kind: z.literal("axis"),
+    input: ControllerAxisInput,
+    control: ControlId,
+  }),
+  z.strictObject({
+    kind: z.literal("axis-button"),
+    input: ControllerAxisInput,
+    direction: z.union([z.literal(-1), z.literal(1)]),
+    control: ControlId,
+  }),
+]);
+
+const ControllerBindingsSchema = z.strictObject({
+  schema: z.literal(1),
+  bindings: z.array(ControllerBindingSchema).min(1).max(64),
+});
 
 const ScreenSchema = z.strictObject({
   logicalWidth: z.number().int().min(160).max(4_096),
@@ -69,10 +118,11 @@ const ManifestSchema = z.strictObject({
     protocol: z.literal("thorium-game-channel-v1"),
   }),
   controls: z.array(z.strictObject({
-    id: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/),
+    id: ControlId,
     label: z.string().min(1).max(80),
     kind: z.enum(["button", "axis"]),
   })).min(1).max(128),
+  controllerBindings: ControllerBindingsSchema.optional(),
   capabilities: z.array(Capability).max(2),
   budgets: z.strictObject({
     maxPackageBytes: z.number().int().min(1).max(134_217_728),
@@ -120,6 +170,54 @@ const ManifestSchema = z.strictObject({
   }
   if (new Set(manifest.controls.map((control) => control.id)).size !== manifest.controls.length) {
     context.addIssue({ code: "custom", path: ["controls"], message: "control ids must be unique" });
+  }
+  const controllerBindings = manifest.controllerBindings;
+  if (controllerBindings !== undefined) {
+    const controlsById = new Map(manifest.controls.map((control) => [control.id, control]));
+    const sourceKeys = new Set<string>();
+    const axisModes = new Map<string, "axis" | "axis-button">();
+    for (const [index, binding] of controllerBindings.bindings.entries()) {
+      const sourceKey = binding.kind === "axis-button"
+        ? `${binding.kind}\0${binding.input}\0${binding.direction}`
+        : `${binding.kind}\0${binding.input}`;
+      if (sourceKeys.has(sourceKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["controllerBindings", "bindings", index],
+          message: "controller binding sources must be unique",
+        });
+      }
+      sourceKeys.add(sourceKey);
+
+      if (binding.kind !== "button") {
+        const priorMode = axisModes.get(binding.input);
+        if (priorMode !== undefined && priorMode !== binding.kind) {
+          context.addIssue({
+            code: "custom",
+            path: ["controllerBindings", "bindings", index, "input"],
+            message: "an axis input cannot mix axis and axis-button bindings",
+          });
+        } else {
+          axisModes.set(binding.input, binding.kind);
+        }
+      }
+
+      const control = controlsById.get(binding.control);
+      const expectedKind = binding.kind === "axis" ? "axis" : "button";
+      if (control === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["controllerBindings", "bindings", index, "control"],
+          message: "controller binding must reference a declared control",
+        });
+      } else if (control.kind !== expectedKind) {
+        context.addIssue({
+          code: "custom",
+          path: ["controllerBindings", "bindings", index, "control"],
+          message: `${binding.kind} binding must reference a ${expectedKind} control`,
+        });
+      }
+    }
   }
   if (new Set(manifest.capabilities).size !== manifest.capabilities.length) {
     context.addIssue({ code: "custom", path: ["capabilities"], message: "capabilities must be unique" });
@@ -375,8 +473,10 @@ export function verifyPublishedGameRelease(input: {
     `v1/packages/${encodeURIComponent(manifest.packageId)}/${encodeURIComponent(manifest.version)}/${encodeURIComponent(descriptor.bundle.fileName)}`,
     base,
   ).toString();
+  const { controllerBindings, ...manifestFields } = manifest;
   const release: GameRelease = {
-    ...manifest,
+    ...manifestFields,
+    ...(controllerBindings === undefined ? {} : { controllerBindings }),
     players: {
       minSlots: manifest.players.minSlots,
       maxSlots: manifest.players.maxSlots,

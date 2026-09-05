@@ -8,6 +8,7 @@ import { canonicalJson, sha256 } from "./descriptor.js";
 import { connectAuthoritativeSession } from "./colyseus.js";
 import { BrowserHostTransport, HostClient } from "./host.js";
 import { ManifestValidationError, validateManifest } from "./manifest.js";
+import { CONTROLLER_AXES, CONTROLLER_BUTTONS } from "./controller-bindings.js";
 import { loadGamePackage, packGamePackage } from "./pack.js";
 import { runGame } from "./runtime.js";
 import { createTestDevice, ManualFrameDriver, twoPlayersOneAccount } from "./testing.js";
@@ -60,6 +61,58 @@ test("validates release-authored local seat routing and required online authorit
     assert.throws(() => validateManifest({ ...validManifest, players: { ...validManifest.players, defaultLocalSeatPlan: plan } }), ManifestValidationError);
   }
   assert.throws(() => validateManifest({ ...validManifest, multiplayer: { ...validManifest.multiplayer, online: false, requiresOnline: true } }), ManifestValidationError);
+});
+
+test("authored controller profiles validate physical inputs, semantic types, and immutable package identity", () => {
+  const controls = [...validManifest.controls, { id: "steer", label: "Steer", kind: "axis" }] as const;
+  const button = { kind: "button", input: "south", control: "tap" };
+  const axis = { kind: "axis", input: "left-x", control: "steer" };
+  const direction = { kind: "axis-button", input: "left-y", direction: -1, control: "tap" };
+  const profile = { schema: 1, bindings: [button, axis, direction] };
+  const manifest = validateManifest({ ...validManifest, controls, controllerBindings: profile });
+  assert.deepEqual(manifest.controllerBindings, profile);
+  const files = validManifest.runtime.files.map(path => ({ path, bytes: new TextEncoder().encode("game fixture") }));
+  const packed = packGamePackage({ manifest, files });
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(unzipSync(packed.archive)["thorium.json"])).controllerBindings, profile);
+  const changed = validateManifest({ ...manifest, controllerBindings: { schema: 1, bindings: [{ ...button, input: "north" }, axis, direction] } });
+  assert.notEqual(packed.descriptor.manifestSha256, packGamePackage({ manifest: changed, files }).descriptor.manifestSha256);
+  assert.equal(validateManifest(validManifest).controllerBindings, undefined, "legacy canonical bytes receive no defaults");
+
+  for (const input of CONTROLLER_BUTTONS) {
+    validateManifest({ ...validManifest, controllerBindings: { schema: 1, bindings: [{ ...button, input }] } });
+  }
+  for (const input of CONTROLLER_AXES) {
+    validateManifest({ ...validManifest, controls, controllerBindings: { schema: 1, bindings: [{ ...axis, input }] } });
+  }
+  for (const invalid of [
+    null, { schema: 2, bindings: [button] }, { schema: 1, bindings: [] },
+    { schema: 1, bindings: Array.from({ length: 65 }, () => button) },
+    { ...profile, playerSlot: 0 },
+    ...[
+      [button, button], [{ ...button, input: "button-999" }], [{ ...button, control: "undeclared" }],
+      [{ ...button, control: "steer" }], [{ ...axis, control: "tap" }],
+      [{ ...direction, direction: 0 }], [{ ...direction, direction: "-1" }],
+      [{ ...button, direction: 1 }], [{ ...axis, threshold: 0.1 }],
+      [axis, { ...direction, input: "left-x" }],
+    ].map(bindings => ({ schema: 1, bindings })),
+  ]) {
+    assert.throws(() => validateManifest({ ...validManifest, controls, controllerBindings: invalid }), ManifestValidationError);
+  }
+  // D-pad and stick may hold the same semantic button without duplicating a physical source.
+  validateManifest({ ...validManifest, controllerBindings: { schema: 1, bindings: [button, direction] } });
+});
+
+test("bootstrap exposes controller authority without granting new PlayerSlot leases", () => {
+  const fixture = createTestDevice({ gameId: validManifest.packageId, accountSessions: twoPlayersOneAccount, controls: validManifest.controls });
+  const transport = { readBootstrap: async () => fixture.main.bootstrap, send: () => undefined, subscribe: () => () => undefined };
+  for (const controllerInput of ["native", "browser"] as const) {
+    const host = new HostClient({ ...fixture.main.bootstrap, controllerInput }, transport);
+    assert.equal(host.bootstrap.controllerInput, controllerInput);
+    assert.ok(Object.isFrozen(host.bootstrap));
+    assert.deepEqual(host.bootstrap.controlledPlayerSlots, fixture.main.bootstrap.controlledPlayerSlots);
+  }
+  assert.equal(new HostClient(fixture.main.bootstrap, transport).bootstrap.controllerInput, undefined);
+  assert.throws(() => new HostClient({ ...fixture.main.bootstrap, controllerInput: "arbitrary" } as unknown as GameBootstrap, transport), /controller input authority/);
 });
 
 test("packs byte-for-byte deterministic ZIPs and a stable sorted descriptor", () => {

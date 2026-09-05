@@ -110,6 +110,49 @@
         }
       }
     },
+    "controllerBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "bindings"],
+      "properties": {
+        "schema": { "const": 1 },
+        "bindings": {
+          "type": "array", "minItems": 1, "maxItems": 64,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object", "additionalProperties": false,
+                "required": ["kind", "input", "control"],
+                "properties": {
+                  "kind": { "const": "button" },
+                  "input": { "enum": ["south", "east", "west", "north", "dpad-up", "dpad-down", "dpad-left", "dpad-right", "left-shoulder", "right-shoulder", "left-stick", "right-stick", "start", "select"] },
+                  "control": { "$ref": "#/$defs/controlId" }
+                }
+              },
+              {
+                "type": "object", "additionalProperties": false,
+                "required": ["kind", "input", "control"],
+                "properties": {
+                  "kind": { "const": "axis" },
+                  "input": { "$ref": "#/$defs/controllerAxis" },
+                  "control": { "$ref": "#/$defs/controlId" }
+                }
+              },
+              {
+                "type": "object", "additionalProperties": false,
+                "required": ["kind", "input", "direction", "control"],
+                "properties": {
+                  "kind": { "const": "axis-button" },
+                  "input": { "$ref": "#/$defs/controllerAxis" },
+                  "direction": { "enum": [-1, 1] },
+                  "control": { "$ref": "#/$defs/controlId" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     "capabilities": {
       "type": "array",
       "uniqueItems": true,
@@ -127,6 +170,8 @@
     }
   },
   "$defs": {
+    "controlId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+    "controllerAxis": { "enum": ["left-x", "left-y", "right-x", "right-y", "left-trigger", "right-trigger"] },
     "packagePath": {
       "type": "string",
       "minLength": 1,

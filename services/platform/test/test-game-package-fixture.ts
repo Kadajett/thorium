@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import type { InMemoryPackageArtifact } from "../src/adapters/in-memory-package-artifact-store.js";
-import type { GamePackageFile, GameRelease } from "../src/domain/game-package.js";
+import type {
+  GamePackageFile,
+  GameRelease,
+  SemanticControl,
+} from "../src/domain/game-package.js";
 
 export const TEST_GAME_ARTIFACT_KEY = {
   packageId: "dev.yougotserved.platform-fixture",
@@ -260,6 +264,38 @@ export function createRequiresOnlineTestGamePackageFixture(publicBaseUrl: string
   };
   return {
     release,
+    descriptor,
+    artifact: {
+      key: TEST_GAME_ARTIFACT_KEY,
+      bytes: archiveBytes,
+    },
+  };
+}
+
+export function createControllerBindingsTestGamePackageFixture(input: {
+  readonly controllerBindings: unknown;
+  readonly controls?: readonly SemanticControl[];
+}) {
+  const controllerManifest = {
+    ...manifest,
+    controls: input.controls ?? manifest.controls,
+    controllerBindings: input.controllerBindings,
+  };
+  const controllerManifestBytes = Buffer.from(canonicalJson(controllerManifest));
+  const archiveBytes = createStoredZip([
+    ...TEST_RUNTIME_FILES,
+    { path: "thorium.json", bytes: controllerManifestBytes },
+  ]);
+  const descriptor = {
+    ...TEST_GAME_DEPLOY_DESCRIPTOR,
+    manifestSha256: sha256(controllerManifestBytes),
+    bundle: {
+      ...TEST_GAME_DEPLOY_DESCRIPTOR.bundle,
+      sha256: sha256(archiveBytes),
+      sizeBytes: archiveBytes.byteLength,
+    },
+  } as const;
+  return {
     descriptor,
     artifact: {
       key: TEST_GAME_ARTIFACT_KEY,

@@ -289,6 +289,7 @@ function publicBootstrap(bootstrap: GameBootstrap): PublicGameBootstrap {
   return Object.freeze({
     protocolVersion: bootstrap.protocolVersion,
     surface: bootstrap.surface,
+    ...(bootstrap.controllerInput === undefined ? {} : { controllerInput: bootstrap.controllerInput }),
     game: Object.freeze({
       id: bootstrap.game.id,
       version: bootstrap.game.version,
@@ -328,6 +329,9 @@ export function assertBootstrap(value: unknown): asserts value is GameBootstrap 
   const bootstrap = objectRecord(value) as Partial<GameBootstrap> | undefined;
   if (!bootstrap) throw new TypeError("Missing bootstrap object");
   if (bootstrap.protocolVersion !== 1) throw new TypeError("Unsupported host protocol version");
+  if (bootstrap.controllerInput !== undefined && bootstrap.controllerInput !== "native" && bootstrap.controllerInput !== "browser") {
+    throw new TypeError("Unsupported controller input authority");
+  }
   if (bootstrap.surface !== SurfaceRole.Main && bootstrap.surface !== SurfaceRole.Companion) {
     throw new TypeError("Bootstrap surface must be main or companion");
   }

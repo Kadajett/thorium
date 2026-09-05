@@ -77,6 +77,8 @@ export interface GameBootstrap {
   /** Player Slots for which this surface may originate semantic controls. */
   readonly controlledPlayerSlots: readonly PlayerSlot[];
   readonly controls: readonly SemanticControl[];
+  /** Native hosts with authored mappings own controller input; previews may omit this. */
+  readonly controllerInput?: "native" | "browser";
   readonly render: {
     readonly logicalWidth: number;
     readonly logicalHeight: number;
