@@ -72,7 +72,8 @@ Required secrets are `ACCOUNT_TOKEN_SECRET` and `SESSION_TICKET_SECRET` (at leas
 - `DATABASE_URL`: PostgreSQL connection URL. It is optional for local
   development and required when `NODE_ENV=production`. Startup applies
   immutable, checksum-recorded migrations transactionally under a database
-  advisory lock.
+  advisory lock. PostgreSQL is also the production catalog metadata store;
+  the in-memory sample catalog is only used when this setting is absent.
 
 The filesystem adapter expects this immutable layout:
 
@@ -86,16 +87,26 @@ PACKAGE_ARTIFACT_DIRECTORY/
 Missing roots or files produce a package 404. A stored archive whose verified
 size or digest differs from the catalog is never served.
 
-For a local server checkout, generate Tap Race and place it in the filesystem
-adapter layout before starting the platform:
+## Publishing a Game Release
+
+Publication is an offline operator action, not a public HTTP endpoint. Stage a
+deploy descriptor and its matching ZIP on a read-only input volume, then run
+the platform image as a one-shot Job with the existing `DATABASE_URL`,
+`PUBLIC_BASE_URL`, and a read-write mount of `PACKAGE_ARTIFACT_DIRECTORY`:
 
 ```sh
-pnpm --filter @thorium/game-sdk build
-pnpm --filter @thorium-game/tap-race run pack
-mkdir -p services/platform/artifacts/dev.yougotserved.tap-race/0.1.0
-cp games/tap-race/artifacts/dev.yougotserved.tap-race-0.1.0.zip \
-  services/platform/artifacts/dev.yougotserved.tap-race/0.1.0/
+node dist/publication/import-game-release.js \
+  /imports/dev.yougotserved.example-1.0.0.deploy.json \
+  /imports/dev.yougotserved.example-1.0.0.zip
 ```
+
+The importer validates the descriptor, embedded manifest, archive envelope,
+and every declared file before atomically storing immutable bytes and then
+cataloging the exact release. Identical reruns are safe; package/version or
+artifact reuse with different content is rejected. Kubernetes RBAC controls
+who may create the Job and access its database Secret and read-write package
+PVC, so no publisher credential is exposed through the application API. The
+long-running platform should mount the same package PVC read-only.
 
 ## Container
 
@@ -106,11 +117,11 @@ repository root as its build context:
 docker build -f services/platform/Dockerfile -t thorium-platform .
 ```
 
-The build compiles the SDK and Tap Race from the locked workspace sources, then
-deterministically generates and includes the finalized archive; it does not
-depend on the gitignored local ZIP. Production can replace the filesystem
-adapter later or mount a read-only artifact volume at `/var/lib/thorium/packages`
-without changing the HTTP delivery interface.
+The build includes only the platform service and its migrations. Game sources
+and archives are not build inputs and the image starts with an empty package
+directory. Production must mount the durable package volume at
+`/var/lib/thorium/packages`; releases are added independently with the
+operator importer above.
 
 Run the image with an HTTPS public origin, PostgreSQL, and the two secrets:
 

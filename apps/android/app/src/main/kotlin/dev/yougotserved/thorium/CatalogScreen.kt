@@ -6,20 +6,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,11 +43,23 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -55,11 +70,15 @@ fun CatalogScreen(
     error: String?,
     onSearch: (String) -> Unit,
     onAction: (CatalogItem) -> Unit,
+    onBack: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableIntStateOf(0) }
-    var playKeyHeld by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
+    var searchFocused by remember { mutableStateOf(false) }
+    val catalogFocusRequester = remember { FocusRequester() }
+    val searchFocusRequester = remember { FocusRequester() }
+    val pressedKeys = remember { mutableSetOf<CatalogControllerKey>() }
+    val gridState = rememberLazyGridState()
     val matches = items.filter { item ->
         query.isBlank() || item.game.title.contains(query, ignoreCase = true) ||
             item.game.tagline.contains(query, ignoreCase = true)
@@ -68,192 +87,328 @@ fun CatalogScreen(
     LaunchedEffect(matches.size) {
         selected = selected.coerceIn(0, (matches.size - 1).coerceAtLeast(0))
     }
+    LaunchedEffect(selected, matches.size) {
+        if (matches.isNotEmpty()) gridState.animateScrollToItem(selected)
+    }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
                     listOf(Color(0xFF171329), Color(0xFF090A12)),
                 ),
-            )
-            .onPreviewKeyEvent { event ->
-                if (matches.isEmpty()) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionDown -> {
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        selected = (selected + 1).coerceAtMost(matches.lastIndex)
-                    }
-                    Key.DirectionUp -> {
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        selected = (selected - 1).coerceAtLeast(0)
-                    }
-                    Key.Enter, Key.NumPadEnter, Key.ButtonA -> {
-                        when (event.type) {
-                            KeyEventType.KeyDown -> if (!playKeyHeld) {
-                                playKeyHeld = true
-                                onAction(matches[selected])
-                            }
-                            KeyEventType.KeyUp -> playKeyHeld = false
-                            else -> return@onPreviewKeyEvent false
-                        }
-                    }
-                    else -> return@onPreviewKeyEvent false
-                }
-                true
-            }
-            .focusRequester(focusRequester)
-            .focusable(),
+            ),
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(28.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            item {
-                Text(
-                    text = "THORIUM",
-                    color = Color(0xFF67E8F9),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 3.sp,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Pick something quick.",
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Tiny games built for both screens.",
-                    color = Color(0xFFAAA6BD),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
+        val gridSpacing = 14.dp
+        val availableWidth = maxWidth - 48.dp
+        val columnCount = ((availableWidth.value + gridSpacing.value) /
+            (MINIMUM_CARD_WIDTH.value + gridSpacing.value)).toInt().coerceAtLeast(1)
 
-            item {
+        fun handle(command: CatalogControllerCommand) {
+            when (command) {
+                CatalogControllerCommand.MOVE_UP,
+                CatalogControllerCommand.MOVE_DOWN,
+                CatalogControllerCommand.MOVE_LEFT,
+                CatalogControllerCommand.MOVE_RIGHT,
+                -> {
+                    selected = CatalogControllerPolicy.moveSelection(
+                        selected = selected,
+                        itemCount = matches.size,
+                        columnCount = columnCount,
+                        command = command,
+                    )
+                    catalogFocusRequester.requestFocus()
+                }
+                CatalogControllerCommand.ACTIVATE -> matches.getOrNull(selected)?.let(onAction)
+                CatalogControllerCommand.SEARCH -> searchFocusRequester.requestFocus()
+                CatalogControllerCommand.REFRESH -> onSearch(query)
+                CatalogControllerCommand.BACK_OR_CLEAR -> when (
+                    CatalogControllerPolicy.backDecision(query, searchFocused)
+                ) {
+                    CatalogBackDecision.CLEAR_SEARCH -> {
+                        query = ""
+                        onSearch("")
+                        catalogFocusRequester.requestFocus()
+                    }
+                    CatalogBackDecision.NAVIGATE_BACK -> onBack()
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(catalogFocusRequester)
+                .onPreviewKeyEvent { event ->
+                    val input = event.toCatalogControllerInput(pressedKeys)
+                        ?: return@onPreviewKeyEvent false
+                    CatalogControllerPolicy.command(input)?.let(::handle)
+                    true
+                }
+                .focusable()
+                .semantics { contentDescription = "Thorium game catalog" }
+                .padding(horizontal = 24.dp, vertical = 18.dp),
+        ) {
+            CatalogHeader()
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(searchFocusRequester)
+                        .onFocusChanged { searchFocused = it.isFocused },
                     label = { Text("Search games") },
                     singleLine = true,
-                    keyboardActions = KeyboardActions(
-                        onDone = { onSearch(query) },
-                    ),
+                    keyboardActions = KeyboardActions(onDone = { onSearch(query) }),
                 )
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = { onSearch(query) }) {
-                    Text("Search remote catalog")
-                }
+                Button(onClick = { onSearch(query) }) { Text("Search") }
+                Button(onClick = { onSearch(query) }) { Text("Refresh") }
             }
+            Spacer(Modifier.height(10.dp))
 
             if (loading) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.width(28.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Text("Loading catalog…", color = Color(0xFFD5D0E4))
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.width(24.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Loading catalog…", color = Color(0xFFD5D0E4))
                 }
+                Spacer(Modifier.height(8.dp))
             }
-
             error?.let { message ->
-                item {
-                    Text(message, color = Color(0xFFFFA8A8))
-                }
+                Text(
+                    text = message,
+                    color = Color(0xFFFFA8A8),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                Spacer(Modifier.height(8.dp))
             }
 
-            if (matches.isEmpty()) {
-                item {
+            if (!loading && matches.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "No games found. Try a shorter search.",
                         color = Color(0xFFAAA6BD),
-                        modifier = Modifier.padding(vertical = 36.dp),
                     )
                 }
             } else {
-                itemsIndexed(
-                    matches,
-                    key = { _, item -> "${item.game.packageId}:${item.game.contentDigest ?: "bundled"}" },
-                ) { index, item ->
-                    GameCard(
-                        item = item,
-                        selected = index == selected,
-                        onSelect = { selected = index },
-                        onAction = { onAction(item) },
-                    )
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columnCount),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                    verticalArrangement = Arrangement.spacedBy(gridSpacing),
+                ) {
+                    itemsIndexed(
+                        items = matches,
+                        key = { _, item -> "${item.game.packageId}:${item.game.contentDigest}" },
+                    ) { index, item ->
+                        GameCard(
+                            item = item,
+                            focused = CatalogControllerPolicy.isCardFocused(
+                                selected = selected,
+                                index = index,
+                                searchFocused = searchFocused,
+                            ),
+                            onSelect = {
+                                selected = index
+                                catalogFocusRequester.requestFocus()
+                            },
+                            onAction = {
+                                selected = index
+                                onAction(item)
+                            },
+                        )
+                    }
                 }
             }
         }
     }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) { catalogFocusRequester.requestFocus() }
+}
+
+@Composable
+private fun CatalogHeader() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "THORIUM",
+                color = Color(0xFF67E8F9),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+            )
+            Text(
+                text = "Pick something quick.",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.semantics { heading() },
+            )
+        }
+        Text(
+            text = "D-pad Navigate  ·  A Select  ·  X Search  ·  Y Refresh  ·  B Back",
+            color = Color(0xFFAAA6BD),
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.End,
+            maxLines = 2,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 @Composable
 private fun GameCard(
     item: CatalogItem,
-    selected: Boolean,
+    focused: Boolean,
     onSelect: () -> Unit,
     onAction: () -> Unit,
 ) {
     val game = item.game
     val accent = Color(game.accent)
-    Row(
+    val enabled = item.actionState != CatalogActionState.INSTALLING
+    val actionLabel = when (item.actionState) {
+        CatalogActionState.INSTALLED -> "Play"
+        CatalogActionState.AVAILABLE -> "Install"
+        CatalogActionState.INSTALLING -> "Installing"
+        CatalogActionState.INSTALL_ERROR -> "Retry"
+    }
+    val initials = remember(game.title) {
+        game.title.trim().split(Regex("\\s+"))
+            .take(2)
+            .mapNotNull { word -> word.firstOrNull() }
+            .joinToString("")
+            .uppercase()
+            .ifEmpty { "?" }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF1F1B2E))
+            .heightIn(min = 132.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (focused) Color(0xFF29213F) else Color(0xFF1F1B2E))
             .border(
-                width = if (selected) 3.dp else 1.dp,
-                color = if (selected) accent else Color(0xFF39344A),
-                shape = RoundedCornerShape(22.dp),
+                width = if (focused) 3.dp else 1.dp,
+                color = if (focused) accent else Color(0xFF39344A),
+                shape = RoundedCornerShape(18.dp),
             )
             .onFocusChanged { if (it.isFocused) onSelect() }
+            .semantics(mergeDescendants = true) {
+                selected = focused
+                stateDescription = actionLabel
+                role = Role.Button
+            }
             .clickable(
-                enabled = item.actionState != CatalogActionState.INSTALLING,
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = actionLabel,
                 onClick = onAction,
             )
-            .padding(20.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .width(76.dp)
-                .height(76.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                    Brush.linearGradient(listOf(accent, Color(0xFF22D3EE))),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("TR", color = Color.White, fontWeight = FontWeight.Black, fontSize = 24.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(54.dp)
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(accent, Color(0xFF22D3EE)))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(initials, color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = game.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = game.tagline,
+                    color = Color(0xFFD5D0E4),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Spacer(Modifier.width(18.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(game.tagline, color = Color(0xFFD5D0E4), style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
-            Text(game.playerLabel, color = Color(0xFF8DE8F4), style = MaterialTheme.typography.labelMedium)
-        }
-        Button(
-            onClick = onAction,
-            enabled = item.actionState != CatalogActionState.INSTALLING,
-            colors = ButtonDefaults.buttonColors(containerColor = accent),
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                when (item.actionState) {
-                    CatalogActionState.BUNDLED, CatalogActionState.INSTALLED -> "Play"
-                    CatalogActionState.AVAILABLE -> "Install"
-                    CatalogActionState.INSTALLING -> "Installing…"
-                    CatalogActionState.INSTALL_ERROR -> "Retry"
-                },
+                text = game.playerLabel,
+                color = Color(0xFF8DE8F4),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Text(
+                text = actionLabel,
+                color = if (enabled) Color.White else Color(0xFFAAA6BD),
                 fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (enabled) accent else Color(0xFF39344A))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+        item.error?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = message,
+                color = Color(0xFFFFA8A8),
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }
 }
+
+private fun KeyEvent.toCatalogControllerInput(
+    pressedKeys: MutableSet<CatalogControllerKey>,
+): CatalogControllerInput? {
+    val controllerKey = key.toCatalogControllerKey() ?: return null
+    val phase = when (type) {
+        KeyEventType.KeyDown -> ControllerKeyPhase.DOWN
+        KeyEventType.KeyUp -> ControllerKeyPhase.UP
+        else -> return null
+    }
+    val repeatCount = when (phase) {
+        ControllerKeyPhase.DOWN -> if (pressedKeys.add(controllerKey)) 0 else 1
+        ControllerKeyPhase.UP -> {
+            pressedKeys.remove(controllerKey)
+            0
+        }
+    }
+    return CatalogControllerInput(controllerKey, phase, repeatCount)
+}
+
+private fun Key.toCatalogControllerKey(): CatalogControllerKey? = when (this) {
+    Key.DirectionUp -> CatalogControllerKey.DPAD_UP
+    Key.DirectionDown -> CatalogControllerKey.DPAD_DOWN
+    Key.DirectionLeft -> CatalogControllerKey.DPAD_LEFT
+    Key.DirectionRight -> CatalogControllerKey.DPAD_RIGHT
+    Key.ButtonA -> CatalogControllerKey.BUTTON_A
+    Key.ButtonX -> CatalogControllerKey.BUTTON_X
+    Key.ButtonY -> CatalogControllerKey.BUTTON_Y
+    Key.ButtonB -> CatalogControllerKey.BUTTON_B
+    else -> null
+}
+
+private val MINIMUM_CARD_WIDTH = 280.dp

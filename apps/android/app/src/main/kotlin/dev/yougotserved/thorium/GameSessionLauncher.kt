@@ -24,14 +24,13 @@ class GameSessionLauncher internal constructor(
             ?: return GameSessionStartResult.Failed(GameSessionStartFailure.LOCAL_PLAYER_POLICY)
         val digest = game.contentDigest
         if (
-            digest != null &&
-            (!GameLaunchPolicy.isValidDigest(digest) ||
-                !runCatching { releaseIntegrity.verify(game) }.getOrDefault(false))
+            !GameLaunchPolicy.isValidDigest(digest) ||
+                !runCatching { releaseIntegrity.verify(game) }.getOrDefault(false)
         ) {
             return GameSessionStartResult.Failed(GameSessionStartFailure.RELEASE_INTEGRITY)
         }
         if (
-            digest == null || !game.multiplayerOnline ||
+            !game.multiplayerOnline ||
             COLYSEUS_SESSION !in game.capabilities
         ) {
             return GameSessionStartResult.Ready(localLaunch(game, seatPlan))

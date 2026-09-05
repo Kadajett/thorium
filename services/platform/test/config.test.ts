@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { loadEnvironment } from "../src/config.js";
-import { createSampleGames } from "../src/catalog/sample-games.js";
 
 const SECRETS = {
   ACCOUNT_TOKEN_SECRET: "test-account-token-secret-at-least-32-characters",
@@ -9,7 +8,7 @@ const SECRETS = {
 const PRODUCTION_DATABASE_URL = "postgresql://thorium:secret@database.example/thorium";
 
 describe("platform configuration", () => {
-  it("normalizes the public base URL and uses it for catalog package URLs", () => {
+  it("normalizes the public base URL", () => {
     const environment = loadEnvironment({
       ...SECRETS,
       NODE_ENV: "test",
@@ -18,8 +17,6 @@ describe("platform configuration", () => {
 
     expect(environment.PUBLIC_BASE_URL).toBe("http://localhost:9000/thorium");
     expect(environment.BROWSER_ALLOWED_ORIGINS).toEqual([]);
-    expect(createSampleGames(environment.PUBLIC_BASE_URL)[0]?.bundle.url)
-      .toBe("http://localhost:9000/thorium/v1/packages/dev.yougotserved.tap-race/0.1.0/dev.yougotserved.tap-race-0.1.0.zip");
   });
 
   it("normalizes and deduplicates an explicit browser-origin allowlist", () => {

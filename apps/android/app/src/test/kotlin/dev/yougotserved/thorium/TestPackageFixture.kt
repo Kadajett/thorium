@@ -14,6 +14,8 @@ data class TestPackageFixture(
 )
 
 object TestPackages {
+    fun installedGame(): CatalogGame = valid().release.toCatalogGame().copy(release = null)
+
     fun valid(): TestPackageFixture {
         val gameFiles = linkedMapOf(
             "main/index.html" to "<html>Main</html>".toByteArray(),

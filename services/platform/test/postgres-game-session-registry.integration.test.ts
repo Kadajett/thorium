@@ -22,8 +22,8 @@ const describeWithPostgres = databaseUrl === undefined || databaseUrl.length ===
   : describe;
 const migrationName = "0001_game_session_registry.sql";
 const release = {
-  packageId: "dev.yougotserved.tap-race",
-  version: "0.1.0",
+  packageId: "dev.yougotserved.registry-fixture",
+  version: "1.2.3",
   contentDigest: "a".repeat(64),
 } as const;
 const surfaces = [

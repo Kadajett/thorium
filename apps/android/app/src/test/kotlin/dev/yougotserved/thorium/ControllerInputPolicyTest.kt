@@ -71,4 +71,27 @@ class ControllerInputPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun southButtonBindingComesFromPackageDeclaredControlsInsteadOfPackageIdentity() {
+        val release = TestPackages.valid().release
+        val renamed = release.copy(
+            manifest = release.manifest.copy(
+                packageId = "dev.yougotserved.any-game",
+                controls = listOf(
+                    ReleaseControl("aim", "Aim", "axis"),
+                    ReleaseControl("launch", "Launch", "button"),
+                ),
+            ),
+        )
+        val axisOnly = renamed.copy(
+            manifest = renamed.manifest.copy(
+                controls = listOf(ReleaseControl("aim", "Aim", "axis")),
+            ),
+        )
+
+        assertEquals("launch", CatalogBindings.southButton(renamed)?.controlId)
+        assertEquals(0, CatalogBindings.southButton(renamed)?.playerSlot)
+        assertNull(CatalogBindings.southButton(axisOnly))
+    }
 }

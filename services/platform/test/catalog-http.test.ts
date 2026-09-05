@@ -33,8 +33,8 @@ describe("platform HTTP routes", () => {
     const response = await request(app).get("/v1/catalog/games").expect(200);
     expect(response.body.items).toHaveLength(1);
     expect(response.body.items[0]).toMatchObject({
-      packageId: "dev.yougotserved.tap-race",
-      displayName: "Tap Race",
+      packageId: "dev.yougotserved.platform-fixture",
+      displayName: "Platform Fixture",
       runtime: {
         kind: "web-v1",
         entrypoints: {
@@ -71,15 +71,15 @@ describe("platform HTTP routes", () => {
 
     const search = await request(app)
       .get("/v1/catalog/games/search")
-      .query({ q: "tap race" })
+      .query({ q: "platform fixture" })
       .expect(200);
     expect(search.body.items.map((item: { packageId: string }) => item.packageId))
-      .toEqual(["dev.yougotserved.tap-race"]);
+      .toEqual(["dev.yougotserved.platform-fixture"]);
 
     const detail = await request(app)
-      .get("/v1/catalog/games/dev.yougotserved.tap-race")
+      .get("/v1/catalog/games/dev.yougotserved.platform-fixture")
       .expect(200);
-    expect(detail.body.game.version).toBe("0.1.0");
+    expect(detail.body.game.version).toBe("1.2.3");
 
     await request(app)
       .get("/v1/catalog/games/dev.yougotserved.missing")
@@ -130,7 +130,7 @@ describe("platform HTTP routes", () => {
     expect(JSON.stringify(response.body)).not.toContain(accountToken);
     expect(JSON.stringify(response.body)).not.toContain("account-private-123");
     expect(claims[0]).toMatchObject({
-      packageId: "dev.yougotserved.tap-race",
+      packageId: "dev.yougotserved.platform-fixture",
       surfaceId: "upper",
       role: "main",
       playerSlots: [0],

@@ -41,7 +41,7 @@ class GameLaunchPolicyTest {
 
     @Test
     fun launchCarriesReleaseLimitsAndRejectsBindingsOutsideItsLeaseSet() {
-        val launch = GameLaunch.from(DemoCatalog.games.single(), "launch-policy")
+        val launch = GameLaunch.from(TestPackages.installedGame(), "launch-policy")
 
         assertEquals(2, launch.maxLocalSlots)
         assertEquals(setOf(0, 1), launch.localPlayerSlots)
@@ -62,7 +62,7 @@ class GameLaunchPolicyTest {
 
     @Test
     fun rejectsPlayerSlotControlledByBothSurfaceRoles() {
-        val launch = GameLaunch.from(DemoCatalog.games.single(), "overlapping-seat-leases")
+        val launch = GameLaunch.from(TestPackages.installedGame(), "overlapping-seat-leases")
 
         assertThrows(IllegalArgumentException::class.java) {
             launch.copy(

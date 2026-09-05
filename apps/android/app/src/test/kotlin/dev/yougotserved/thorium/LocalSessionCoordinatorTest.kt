@@ -86,7 +86,7 @@ class LocalSessionCoordinatorTest {
         maxLocalSlots = 2,
         localPlayerSlots = setOf(0, 1),
         maxLocalPeerMessageBytes = 4096,
-        contentDigest = null,
+        contentDigest = DIGEST,
         capabilities = emptySet(),
         controlledPlayerSlots = mapOf(
             SurfaceRole.MAIN to setOf(0),
@@ -105,5 +105,10 @@ class LocalSessionCoordinatorTest {
         override fun terminateGameSession() {
             terminations += 1
         }
+    }
+
+    companion object {
+        private const val DIGEST =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     }
 }

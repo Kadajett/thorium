@@ -2,17 +2,19 @@ import { createHash } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { InMemoryPackageArtifactStore } from "../src/adapters/in-memory-package-artifact-store.js";
-import { TAP_RACE_ARTIFACT_KEY } from "../src/catalog/sample-games.js";
 import { createHttpApplication } from "../src/http/routes.js";
 import {
   createTestHarness,
-  TAP_RACE_ARCHIVE_BYTES,
   TEST_GAMES,
 } from "./test-harness.js";
+import {
+  TEST_GAME_ARCHIVE_BYTES,
+  TEST_GAME_ARTIFACT_KEY,
+} from "./test-game-package-fixture.js";
 
-function tapRaceRelease() {
+function testGameRelease() {
   const release = TEST_GAMES[0];
-  if (release === undefined) throw new Error("Tap Race catalog release is missing");
+  if (release === undefined) throw new Error("Test catalog release is missing");
   return release;
 }
 
@@ -30,13 +32,13 @@ function binaryParser(
 
 describe("immutable package artifact delivery", () => {
   it("serves the exact catalog URL with immutable integrity headers", async () => {
-    const release = tapRaceRelease();
+    const release = testGameRelease();
     const app = createHttpApplication(createTestHarness().dependencies);
     const path = new URL(release.bundle.url).pathname;
 
     const response = await request(app).get(path).buffer(true).parse(binaryParser).expect(200);
     expect(Buffer.isBuffer(response.body)).toBe(true);
-    expect(response.body).toEqual(TAP_RACE_ARCHIVE_BYTES);
+    expect(response.body).toEqual(TEST_GAME_ARCHIVE_BYTES);
     expect(response.body.byteLength).toBe(release.bundle.sizeBytes);
     expect(createHash("sha256").update(response.body).digest("hex")).toBe(release.bundle.sha256);
     expect(response.headers).toMatchObject({
@@ -52,7 +54,7 @@ describe("immutable package artifact delivery", () => {
   });
 
   it("supports HEAD, ETag revalidation, and one byte range", async () => {
-    const release = tapRaceRelease();
+    const release = testGameRelease();
     const app = createHttpApplication(createTestHarness().dependencies);
     const path = new URL(release.bundle.url).pathname;
     const etag = `"${release.bundle.sha256}"`;
@@ -77,11 +79,11 @@ describe("immutable package artifact delivery", () => {
       .expect(206);
     expect(range.headers["content-range"]).toBe(`bytes 4-19/${release.bundle.sizeBytes}`);
     expect(range.headers["content-length"]).toBe("16");
-    expect(range.body).toEqual(TAP_RACE_ARCHIVE_BYTES.subarray(4, 20));
+    expect(range.body).toEqual(TEST_GAME_ARCHIVE_BYTES.subarray(4, 20));
   });
 
   it("returns 404 for unpublished paths and absent stored artifacts", async () => {
-    const release = tapRaceRelease();
+    const release = testGameRelease();
     const harness = createTestHarness();
     const path = new URL(release.bundle.url).pathname;
 
@@ -101,11 +103,11 @@ describe("immutable package artifact delivery", () => {
   });
 
   it("refuses bytes that drift from immutable catalog metadata", async () => {
-    const release = tapRaceRelease();
-    const corrupted = Uint8Array.from(TAP_RACE_ARCHIVE_BYTES);
+    const release = testGameRelease();
+    const corrupted = Uint8Array.from(TEST_GAME_ARCHIVE_BYTES);
     corrupted[100] = (corrupted[100] ?? 0) ^ 0xff;
     const harness = createTestHarness(undefined, {
-      artifacts: [{ key: TAP_RACE_ARTIFACT_KEY, bytes: corrupted }],
+      artifacts: [{ key: TEST_GAME_ARTIFACT_KEY, bytes: corrupted }],
     });
 
     await request(createHttpApplication(harness.dependencies))

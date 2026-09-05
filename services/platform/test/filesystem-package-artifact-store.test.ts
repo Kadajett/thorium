@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FileSystemPackageArtifactStore } from "../src/adapters/filesystem-package-artifact-store.js";
-import { TAP_RACE_ARTIFACT_KEY } from "../src/catalog/sample-games.js";
+import { TEST_GAME_ARTIFACT_KEY } from "./test-game-package-fixture.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -29,15 +29,15 @@ afterEach(async () => {
 describe("FileSystemPackageArtifactStore", () => {
   it("verifies an immutable artifact once and reuses the cached snapshot", async () => {
     const root = await temporaryDirectory("thorium-artifacts-");
-    const artifactDirectory = join(root, TAP_RACE_ARTIFACT_KEY.packageId, TAP_RACE_ARTIFACT_KEY.version);
-    const artifactPath = join(artifactDirectory, TAP_RACE_ARTIFACT_KEY.fileName);
+    const artifactDirectory = join(root, TEST_GAME_ARTIFACT_KEY.packageId, TEST_GAME_ARTIFACT_KEY.version);
+    const artifactPath = join(artifactDirectory, TEST_GAME_ARTIFACT_KEY.fileName);
     await mkdir(artifactDirectory, { recursive: true });
     await writeFile(artifactPath, "first immutable bytes");
     const store = new FileSystemPackageArtifactStore(root);
 
-    const first = await store.read(TAP_RACE_ARTIFACT_KEY);
+    const first = await store.read(TEST_GAME_ARTIFACT_KEY);
     await writeFile(artifactPath, "changed bytes that must not replace the published snapshot");
-    const second = await store.read(TAP_RACE_ARTIFACT_KEY);
+    const second = await store.read(TEST_GAME_ARTIFACT_KEY);
 
     expect(second).toBe(first);
     expect(first).toMatchObject({
@@ -49,13 +49,13 @@ describe("FileSystemPackageArtifactStore", () => {
   it("rejects a symlink that resolves outside the configured artifact root", async () => {
     const root = await temporaryDirectory("thorium-artifacts-");
     const outside = await temporaryDirectory("thorium-outside-");
-    const artifactDirectory = join(root, TAP_RACE_ARTIFACT_KEY.packageId, TAP_RACE_ARTIFACT_KEY.version);
+    const artifactDirectory = join(root, TEST_GAME_ARTIFACT_KEY.packageId, TEST_GAME_ARTIFACT_KEY.version);
     const outsidePath = join(outside, "outside.zip");
     await mkdir(artifactDirectory, { recursive: true });
     await writeFile(outsidePath, "not inside the package store");
-    await symlink(outsidePath, join(artifactDirectory, TAP_RACE_ARTIFACT_KEY.fileName));
+    await symlink(outsidePath, join(artifactDirectory, TEST_GAME_ARTIFACT_KEY.fileName));
     const store = new FileSystemPackageArtifactStore(root);
 
-    await expect(store.read(TAP_RACE_ARTIFACT_KEY)).rejects.toThrow("package_artifact_outside_root");
+    await expect(store.read(TEST_GAME_ARTIFACT_KEY)).rejects.toThrow("package_artifact_outside_root");
   });
 });

@@ -6,8 +6,8 @@ import type {
 } from "../src/session-registry/game-session-registry.js";
 
 const release = {
-  packageId: "dev.yougotserved.tap-race",
-  version: "0.1.0",
+  packageId: "dev.yougotserved.registry-fixture",
+  version: "1.2.3",
   contentDigest: "a".repeat(64),
 } as const;
 

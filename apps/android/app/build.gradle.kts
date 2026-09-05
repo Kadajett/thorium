@@ -23,8 +23,8 @@ android {
         applicationId = "dev.yougotserved.thorium"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0-dev"
+        versionCode = 2
+        versionName = "0.1.0-dev.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "CATALOG_BASE_URL", "\"${catalogBaseUrl.trimEnd('/')}\"")
     }
@@ -62,9 +62,6 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
-    sourceSets.getByName("main").assets.directories.add(
-        "../../../games/tap-race/android-assets",
-    )
 }
 
 dependencies {

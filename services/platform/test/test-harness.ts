@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { InMemoryGameCatalogRepository } from "../src/adapters/in-memory-game-catalog.js";
 import { InMemoryGameSessionRegistry } from "../src/adapters/in-memory-game-session-registry.js";
@@ -6,27 +5,21 @@ import {
   InMemoryPackageArtifactStore,
   type InMemoryPackageArtifact,
 } from "../src/adapters/in-memory-package-artifact-store.js";
-import {
-  createSampleGames,
-  TAP_RACE_ARTIFACT_KEY,
-} from "../src/catalog/sample-games.js";
 import type { PlatformDependencies } from "../src/platform.js";
 import { HmacAccountTokenAdapter } from "../src/security/account-token-adapter.js";
 import { SessionTicketService } from "../src/security/session-ticket-service.js";
 import type { AccountSession } from "../src/ports/account-identity.js";
 import type { GameRelease } from "../src/domain/game-package.js";
 import type { RequestedGameSessionSurface } from "../src/session-registry/game-session-registry.js";
+import {
+  createTestGamePackageFixture,
+  createTestGames,
+} from "./test-game-package-fixture.js";
 
 export const TEST_ACCOUNT_SECRET = "test-account-token-secret-at-least-32-characters";
 export const TEST_SESSION_SECRET = "test-session-ticket-secret-at-least-32-characters";
 export const TEST_PUBLIC_BASE_URL = "http://platform.test";
-export const TEST_GAMES = createSampleGames(TEST_PUBLIC_BASE_URL);
-export const TAP_RACE_ARCHIVE_BYTES = readFileSync(
-  new URL(
-    `../../../games/tap-race/artifacts/${TAP_RACE_ARTIFACT_KEY.fileName}`,
-    import.meta.url,
-  ),
-);
+export const TEST_GAMES = createTestGames(TEST_PUBLIC_BASE_URL);
 
 export interface TestHarnessOptions {
   readonly artifacts?: readonly InMemoryPackageArtifact[];
@@ -44,12 +37,13 @@ export function createTestHarness(
   readonly packageArtifacts: InMemoryPackageArtifactStore;
 } {
   const catalog = new InMemoryGameCatalogRepository(
-    createSampleGames(options.publicBaseUrl ?? TEST_PUBLIC_BASE_URL),
+    createTestGames(options.publicBaseUrl ?? TEST_PUBLIC_BASE_URL),
   );
-  const packageArtifacts = new InMemoryPackageArtifactStore(options.artifacts ?? [{
-    key: TAP_RACE_ARTIFACT_KEY,
-    bytes: TAP_RACE_ARCHIVE_BYTES,
-  }]);
+  const packageArtifacts = new InMemoryPackageArtifactStore(
+    options.artifacts ?? [
+      createTestGamePackageFixture(options.publicBaseUrl ?? TEST_PUBLIC_BASE_URL).artifact,
+    ],
+  );
   const accountIdentity = new HmacAccountTokenAdapter(TEST_ACCOUNT_SECRET, now);
   const gameSessions = new InMemoryGameSessionRegistry();
   const sessionTickets = new SessionTicketService({

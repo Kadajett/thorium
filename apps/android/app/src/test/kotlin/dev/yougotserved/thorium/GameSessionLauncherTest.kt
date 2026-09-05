@@ -369,8 +369,9 @@ class GameSessionLauncherTest {
         )
     }
 
-    private fun onlineGame(): CatalogGame = DemoCatalog.games.single().copy(
+    private fun onlineGame(): CatalogGame = TestPackages.installedGame().copy(
         contentDigest = DIGEST,
+        multiplayerOnline = true,
     )
 
     private fun request(): GameSessionStartRequest = GameSessionStartRequest(

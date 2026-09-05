@@ -11,8 +11,8 @@ class GameRequestPolicyTest {
         assertEquals(
             GameRequestDecision.PACKAGE_ASSET,
             policy.decide(
-                "https://appassets.androidplatform.net/games/" +
-                    "dev.yougotserved.tap-race/main/index.html",
+                "https://appassets.androidplatform.net/installed-games/releases/" +
+                    "dev.yougotserved.tap-race/0.1.0/${"a".repeat(64)}/main/index.html",
             ),
         )
         assertEquals(
@@ -103,7 +103,7 @@ class GameRequestPolicyTest {
         capabilities: Set<String>,
         capabilityEndpoint: String? = null,
     ): GameLaunch {
-        val digest = if (capabilityEndpoint == null) null else "a".repeat(64)
+        val digest = "a".repeat(64)
         val sessionId = "request-policy"
         val surfaceCapabilities = capabilityEndpoint?.let { endpoint ->
             mapOf(
@@ -116,7 +116,7 @@ class GameRequestPolicyTest {
                         "gameSessionId" to sessionId,
                         "packageId" to "dev.yougotserved.tap-race",
                         "packageVersion" to "0.1.0",
-                        "packageDigest" to requireNotNull(digest),
+                        "packageDigest" to digest,
                     ),
                 ),
             )

@@ -188,7 +188,7 @@ class HostBridgePolicyTest {
         maxLocalSlots = 2,
         localPlayerSlots = localPlayerSlots,
         maxLocalPeerMessageBytes = maxPeerBytes,
-        contentDigest = null,
+        contentDigest = DIGEST,
         capabilities = capabilities,
         controlledPlayerSlots = mapOf(
             SurfaceRole.MAIN to localPlayerSlots.filterTo(mutableSetOf()) { it == 0 },
@@ -208,4 +208,9 @@ class HostBridgePolicyTest {
                 .put("sequence", sequence),
         )
         .toString()
+
+    companion object {
+        private const val DIGEST =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
 }

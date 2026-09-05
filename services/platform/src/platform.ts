@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { FileSystemPackageArtifactStore } from "./adapters/filesystem-package-artifact-store.js";
 import { InMemoryGameCatalogRepository } from "./adapters/in-memory-game-catalog.js";
 import { InMemoryGameSessionRegistry } from "./adapters/in-memory-game-session-registry.js";
+import { PostgresGameCatalogRepository } from "./adapters/postgres/postgres-game-catalog-repository.js";
 import { PostgresGameSessionRegistry } from "./adapters/postgres/postgres-game-session-registry.js";
 import { runPostgresMigrations } from "./adapters/postgres/postgres-migrations.js";
 import { createSampleGames } from "./catalog/sample-games.js";
@@ -33,12 +34,14 @@ export interface PlatformServerOptions {
 export function createPlatformDependencies(
   environment: PlatformEnvironment,
 ): PlatformDependencies {
-  const catalog = new InMemoryGameCatalogRepository(createSampleGames(environment.PUBLIC_BASE_URL));
-  const packageArtifacts = new FileSystemPackageArtifactStore(environment.PACKAGE_ARTIFACT_DIRECTORY);
-  const accountIdentity = new HmacAccountTokenAdapter(environment.ACCOUNT_TOKEN_SECRET);
   const pool = environment.DATABASE_URL === undefined
     ? undefined
     : new Pool({ connectionString: environment.DATABASE_URL });
+  const catalog = pool === undefined
+    ? new InMemoryGameCatalogRepository(createSampleGames(environment.PUBLIC_BASE_URL))
+    : new PostgresGameCatalogRepository(pool);
+  const packageArtifacts = new FileSystemPackageArtifactStore(environment.PACKAGE_ARTIFACT_DIRECTORY);
+  const accountIdentity = new HmacAccountTokenAdapter(environment.ACCOUNT_TOKEN_SECRET);
   const gameSessions = pool === undefined
     ? new InMemoryGameSessionRegistry()
     : new PostgresGameSessionRegistry(pool);

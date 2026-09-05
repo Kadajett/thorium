@@ -87,7 +87,7 @@ class VerifiedGamePackageInstaller(private val storageRoot: Path) {
 
     /** Re-hash app-private runtime bytes immediately before creating a launch/session capability. */
     fun verifyForLaunch(game: CatalogGame): Boolean {
-        val contentDigest = game.contentDigest ?: return true
+        val contentDigest = game.contentDigest
         if (
             !GameLaunchPolicy.isValidPackageId(game.packageId) ||
             !GameLaunchPolicy.isValidVersion(game.version) ||

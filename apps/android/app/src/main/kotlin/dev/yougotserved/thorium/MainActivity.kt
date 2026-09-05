@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var catalogClient: RemoteCatalogClient
     private lateinit var packageDownloader: PackageDownloader
     private lateinit var gameSessionLauncher: GameSessionLauncher
-    private var catalogItems by mutableStateOf(fallbackItems())
+    private var catalogItems by mutableStateOf(emptyList<CatalogItem>())
     private var catalogLoading by mutableStateOf(true)
     private var catalogError by mutableStateOf<String?>(null)
 
@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
                     error = catalogError,
                     onSearch = ::loadCatalog,
                     onAction = ::handleAction,
+                    onBack = onBackPressedDispatcher::onBackPressed,
                 )
             }
         }
@@ -58,21 +59,7 @@ class MainActivity : ComponentActivity() {
         worker.execute {
             runCatching {
                 val remote = catalogClient.search(query)
-                val installedItems = packageStore.installedGames().map { game ->
-                    CatalogItem(game, CatalogActionState.INSTALLED)
-                }
-                val remoteItems = remote.items.map { release ->
-                    val installedGame = packageStore.installedGame(release)
-                    CatalogItem(
-                        game = installedGame ?: release.toCatalogGame(),
-                        actionState = if (installedGame != null) {
-                            CatalogActionState.INSTALLED
-                        } else {
-                            CatalogActionState.AVAILABLE
-                        },
-                    )
-                }
-                mergeLocal(remoteItems, installedItems, query)
+                CatalogItemPolicy.merge(remote.items, packageStore.installedGames(), query)
             }.onSuccess { items ->
                 updateUi(request) {
                     catalogItems = items
@@ -80,15 +67,13 @@ class MainActivity : ComponentActivity() {
                 }
             }.onFailure { error ->
                 val offlineItems = runCatching {
-                    val installed = packageStore.installedGames().map { game ->
-                        CatalogItem(game, CatalogActionState.INSTALLED)
-                    }
-                    mergeLocal(emptyList(), installed, query)
-                }.getOrElse { fallbackItems(query) }
+                    CatalogItemPolicy.merge(emptyList(), packageStore.installedGames(), query)
+                }.getOrElse { emptyList() }
                 updateUi(request) {
                     catalogItems = offlineItems
                     catalogLoading = false
-                    catalogError = "Remote catalog unavailable. Bundled games are still ready. " +
+                    catalogError = "Remote catalog unavailable. Only previously installed games " +
+                        "are available offline. " +
                         (error.message ?: "")
                 }
             }
@@ -97,7 +82,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleAction(item: CatalogItem) {
         when (item.actionState) {
-            CatalogActionState.BUNDLED, CatalogActionState.INSTALLED -> play(item)
+            CatalogActionState.INSTALLED -> play(item)
             CatalogActionState.AVAILABLE, CatalogActionState.INSTALL_ERROR -> install(item)
             CatalogActionState.INSTALLING -> Unit
         }
@@ -175,32 +160,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    private fun mergeLocal(
-        remote: List<CatalogItem>,
-        installed: List<CatalogItem>,
-        query: String,
-    ): List<CatalogItem> {
-        val remoteKeys = remote.map { it.game.packageId to it.game.contentDigest }.toSet()
-        val retainedInstalled = installed.filter { item ->
-            (item.game.packageId to item.game.contentDigest) !in remoteKeys &&
-                (query.isBlank() || item.game.title.contains(query, ignoreCase = true) ||
-                    item.game.tagline.contains(query, ignoreCase = true))
-        }
-        val remotePackages = remote.map { it.game.packageId }.toSet()
-        val installedPackages = retainedInstalled.map { it.game.packageId }.toSet()
-        val bundled = fallbackItems(query).filter { item ->
-            item.game.packageId !in remotePackages && item.game.packageId !in installedPackages
-        }
-        return remote + retainedInstalled + bundled
-    }
-
-    private fun fallbackItems(query: String = ""): List<CatalogItem> = DemoCatalog.games
-        .filter { game ->
-            query.isBlank() || game.title.contains(query, ignoreCase = true) ||
-                game.tagline.contains(query, ignoreCase = true)
-        }
-        .map { game -> CatalogItem(game, CatalogActionState.BUNDLED) }
 
     private fun replaceItem(previous: CatalogItem, replacement: CatalogItem) {
         catalogItems = catalogItems.map { current ->

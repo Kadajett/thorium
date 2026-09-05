@@ -12,15 +12,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY services/platform/package.json ./services/platform/package.json
 RUN pnpm install --frozen-lockfile --prod --filter @thorium/platform...
 
-FROM pnpm AS package-artifact
-
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/game-sdk ./packages/game-sdk
-COPY games/tap-race ./games/tap-race
-RUN pnpm install --frozen-lockfile --filter @thorium-game/tap-race...
-RUN pnpm --filter @thorium/game-sdk build
-RUN pnpm --filter @thorium-game/tap-race run pack
-
 FROM pnpm AS build
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -43,11 +34,7 @@ COPY services/platform/package.json ./package.json
 COPY --from=build /workspace/services/platform/dist ./dist
 COPY --from=build /workspace/services/platform/migrations ./migrations
 
-RUN mkdir -p /var/lib/thorium/packages/dev.yougotserved.tap-race/0.1.0 \
-    && chown -R node:node /var/lib/thorium
-COPY --from=package-artifact --chown=node:node \
-  /workspace/games/tap-race/artifacts/dev.yougotserved.tap-race-0.1.0.zip \
-  /var/lib/thorium/packages/dev.yougotserved.tap-race/0.1.0/dev.yougotserved.tap-race-0.1.0.zip
+RUN mkdir -p /var/lib/thorium/packages && chown -R node:node /var/lib/thorium
 
 USER node
 EXPOSE 2567

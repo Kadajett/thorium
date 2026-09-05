@@ -130,7 +130,6 @@ class WebSurface private constructor(
             }
             WebProcessContainment.configureBeforeWebView(launch.sessionId)
             val loader = WebViewAssetLoader.Builder()
-                .addPathHandler("/games/", WebViewAssetLoader.AssetsPathHandler(activity))
                 .addPathHandler(
                     "/installed-games/",
                     WebViewAssetLoader.InternalStoragePathHandler(

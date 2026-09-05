@@ -82,7 +82,7 @@ data class GameLaunch(
     val maxLocalSlots: Int,
     val localPlayerSlots: Set<Int>,
     val maxLocalPeerMessageBytes: Int,
-    val contentDigest: String?,
+    val contentDigest: String,
     val capabilities: Set<String>,
     val controlledPlayerSlots: Map<SurfaceRole, Set<Int>> = SurfaceRole.entries.associateWith {
         localPlayerSlots
@@ -148,7 +148,7 @@ data class GameLaunch(
         require(maxLocalPeerMessageBytes in 1..64 * 1024) {
             "Invalid maximum local peer message size"
         }
-        require(contentDigest == null || GameLaunchPolicy.isValidDigest(contentDigest)) {
+        require(GameLaunchPolicy.isValidDigest(contentDigest)) {
             "Invalid installed content digest"
         }
         require(
@@ -163,8 +163,7 @@ data class GameLaunch(
             require(capability.joinOptions.getValue("packageId") == packageId)
             require(capability.joinOptions.getValue("packageVersion") == version)
             require(
-                contentDigest != null &&
-                    capability.joinOptions.getValue("packageDigest") == contentDigest,
+                capability.joinOptions.getValue("packageDigest") == contentDigest,
             ) { "Surface capability does not match the Game Release" }
             require(controlledPlayerSlots.containsKey(role))
         }
@@ -334,7 +333,7 @@ data class GameLaunch(
                 maxLocalSlots = intent.getIntExtra(MAX_LOCAL_SLOTS, 0),
                 localPlayerSlots = intent.getIntArrayExtra(LOCAL_PLAYER_SLOTS)?.toSet().orEmpty(),
                 maxLocalPeerMessageBytes = intent.getIntExtra(MAX_LOCAL_PEER_MESSAGE_BYTES, 0),
-                contentDigest = intent.getStringExtra(CONTENT_DIGEST),
+                contentDigest = intent.getStringExtra(CONTENT_DIGEST) ?: return null,
                 capabilities = intent.getStringArrayExtra(CAPABILITIES)?.toSet().orEmpty(),
                 controlledPlayerSlots = mapOf(
                     SurfaceRole.MAIN to intent.getIntArrayExtra(MAIN_CONTROLLED_PLAYER_SLOTS)

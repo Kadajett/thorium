@@ -24,13 +24,12 @@ data class CatalogGame(
     val sameAccountMultipleSlots: Boolean,
     val multiplayerOnline: Boolean,
     val maxLocalPeerMessageBytes: Int,
-    val contentDigest: String?,
+    val contentDigest: String,
     val release: GameRelease?,
     val capabilities: Set<String>,
 )
 
 enum class CatalogActionState {
-    BUNDLED,
     AVAILABLE,
     INSTALLING,
     INSTALLED,
@@ -43,44 +42,10 @@ data class CatalogItem(
     val error: String? = null,
 )
 
-object DemoCatalog {
-    val games = listOf(
-        CatalogGame(
-            packageId = "dev.yougotserved.tap-race",
-            version = "0.1.0",
-            title = "Tap Race",
-            tagline = "Two screens. Two rivals. One very tired A button.",
-            playerLabel = "1–2 local · online ready",
-            accent = 0xFF8B5CF6,
-            mainEntrypoint = "main/index.html",
-            companionEntrypoint = "companion/index.html",
-            runtimeFiles = setOf("main/index.html", "companion/index.html", "dist/game.js"),
-            logicalWidth = 960,
-            logicalHeight = 540,
-            maximumDevicePixelRatio = 2.0,
-            companionLogicalWidth = 960,
-            companionLogicalHeight = 540,
-            companionMaximumDevicePixelRatio = 2.0,
-            controls = listOf(ReleaseControl("tap", "Tap", "button")),
-            southButtonBinding = SouthButtonBinding(playerSlot = 0, controlId = "tap"),
-            minPlayers = 1,
-            maxPlayers = 2,
-            maxLocalSlots = 2,
-            sameAccountMultipleSlots = true,
-            multiplayerOnline = true,
-            maxLocalPeerMessageBytes = 4096,
-            contentDigest = null,
-            release = null,
-            capabilities = setOf("same-device-peer", "colyseus-session"),
-        ),
-    )
-}
-
 object CatalogBindings {
-    fun southButton(release: GameRelease): SouthButtonBinding? = when (release.packageId) {
-        "dev.yougotserved.tap-race" -> SouthButtonBinding(playerSlot = 0, controlId = "tap")
-        else -> null
-    }
+    fun southButton(release: GameRelease): SouthButtonBinding? = release.controls
+        .firstOrNull { control -> control.kind == "button" }
+        ?.let { control -> SouthButtonBinding(playerSlot = 0, controlId = control.id) }
 }
 
 fun GameRelease.toCatalogGame(): CatalogGame = CatalogGame(
@@ -111,3 +76,43 @@ fun GameRelease.toCatalogGame(): CatalogGame = CatalogGame(
     release = this,
     capabilities = capabilities.toSet(),
 )
+
+object CatalogItemPolicy {
+    fun merge(
+        remote: List<GameRelease>,
+        installed: List<CatalogGame>,
+        query: String,
+    ): List<CatalogItem> {
+        val installedByRelease = installed.associateBy { game -> game.releaseKey() }
+        val remoteKeys = remote.mapTo(mutableSetOf()) { release -> release.releaseKey() }
+        val remoteItems = remote.map { release ->
+            val installedGame = installedByRelease[release.releaseKey()]
+            CatalogItem(
+                game = installedGame?.copy(release = release) ?: release.toCatalogGame(),
+                actionState = if (installedGame == null) {
+                    CatalogActionState.AVAILABLE
+                } else {
+                    CatalogActionState.INSTALLED
+                },
+            )
+        }
+        val retainedInstalled = installed.filter { game ->
+            game.releaseKey() !in remoteKeys && game.matches(query)
+        }.map { game -> CatalogItem(game, CatalogActionState.INSTALLED) }
+        return remoteItems + retainedInstalled
+    }
+
+    private fun CatalogGame.matches(query: String): Boolean =
+        query.isBlank() || title.contains(query, ignoreCase = true) ||
+            tagline.contains(query, ignoreCase = true)
+
+    private fun CatalogGame.releaseKey(): ReleaseKey = ReleaseKey(packageId, version, contentDigest)
+
+    private fun GameRelease.releaseKey(): ReleaseKey = ReleaseKey(packageId, version, contentDigest)
+
+    private data class ReleaseKey(
+        val packageId: String,
+        val version: String,
+        val contentDigest: String,
+    )
+}

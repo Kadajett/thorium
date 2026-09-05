@@ -7,30 +7,40 @@ import org.junit.Test
 
 class GameAssetPolicyTest {
     @Test
-    fun allowsOnlyExactHttpsOriginAndPackageTree() {
-        val launch = launch(contentDigest = null)
+    fun allowsOnlyExactHttpsOriginAndInstalledReleaseTree() {
+        val digest = "a".repeat(64)
+        val launch = launch(digest)
+        val expected = "https://appassets.androidplatform.net/installed-games/releases/" +
+            "dev.yougotserved.tap-race/0.1.0/$digest/main/index.html"
         assertTrue(
             GameAssetPolicy.isAllowedPackageUrl(
                 launch,
-                "https://appassets.androidplatform.net/games/dev.yougotserved.tap-race/main/index.html",
+                expected,
             ),
         )
         assertFalse(
             GameAssetPolicy.isAllowedPackageUrl(
                 launch,
-                "http://appassets.androidplatform.net/games/dev.yougotserved.tap-race/main/index.html",
+                expected.replace("https://", "http://"),
             ),
         )
         assertFalse(
             GameAssetPolicy.isAllowedPackageUrl(
                 launch,
-                "https://appassets.androidplatform.net/games/dev.yougotserved.other/main/index.html",
+                "https://appassets.androidplatform.net/games/" +
+                    "dev.yougotserved.tap-race/main/index.html",
             ),
         )
         assertFalse(
             GameAssetPolicy.isAllowedPackageUrl(
                 launch,
-                "https://appassets.androidplatform.net/games/dev.yougotserved.tap-race/%2e%2e/secret",
+                expected.replace("dev.yougotserved.tap-race", "dev.yougotserved.other"),
+            ),
+        )
+        assertFalse(
+            GameAssetPolicy.isAllowedPackageUrl(
+                launch,
+                expected.replace("main/index.html", "%2e%2e/secret"),
             ),
         )
     }
@@ -38,7 +48,7 @@ class GameAssetPolicyTest {
     @Test
     fun installedPackageUrlIncludesExactVersionAndContentDigest() {
         val digest = "a".repeat(64)
-        val launch = launch(contentDigest = digest)
+        val launch = launch(digest)
         val expected = "https://appassets.androidplatform.net/installed-games/releases/" +
             "dev.yougotserved.tap-race/0.1.0/$digest/main/index.html"
 
@@ -48,7 +58,7 @@ class GameAssetPolicyTest {
         assertFalse(GameAssetPolicy.isAllowedPackageUrl(launch, "$expected?session=secret"))
     }
 
-    private fun launch(contentDigest: String?): GameLaunch = GameLaunch(
+    private fun launch(contentDigest: String): GameLaunch = GameLaunch(
         packageId = "dev.yougotserved.tap-race",
         version = "0.1.0",
         sessionId = "asset-policy",

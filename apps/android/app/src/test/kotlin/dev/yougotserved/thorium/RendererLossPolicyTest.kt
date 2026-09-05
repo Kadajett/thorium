@@ -6,7 +6,7 @@ import org.junit.Test
 class RendererLossPolicyTest {
     @Test
     fun recreatesLocalSurfacesButTerminatesSurfacesHoldingOneUseTickets() {
-        val game = DemoCatalog.games.single().copy(contentDigest = DIGEST)
+        val game = TestPackages.installedGame().copy(contentDigest = DIGEST)
         val controlled = mapOf(
             SurfaceRole.MAIN to setOf(0),
             SurfaceRole.COMPANION to setOf(1),
@@ -23,7 +23,7 @@ class RendererLossPolicyTest {
             sessionId = SESSION_ID,
             localPlayerSlots = setOf(0, 1),
             controlledPlayerSlots = controlled,
-            surfaceCapabilities = SurfaceRole.entries.associateWith { role -> capability(role) },
+            surfaceCapabilities = SurfaceRole.entries.associateWith { role -> capability(role, game) },
         )
 
         SurfaceRole.entries.forEach { role ->
@@ -38,7 +38,7 @@ class RendererLossPolicyTest {
         }
     }
 
-    private fun capability(role: SurfaceRole): ColyseusSessionCapability =
+    private fun capability(role: SurfaceRole, game: CatalogGame): ColyseusSessionCapability =
         ColyseusSessionCapability(
             endpoint = "https://games.yougotserved.dev",
             roomName = "game_session",
@@ -46,8 +46,8 @@ class RendererLossPolicyTest {
             expiresAtEpochMs = Long.MAX_VALUE,
             joinOptions = mapOf(
                 "gameSessionId" to SESSION_ID,
-                "packageId" to "dev.yougotserved.tap-race",
-                "packageVersion" to "0.1.0",
+                "packageId" to game.packageId,
+                "packageVersion" to game.version,
                 "packageDigest" to DIGEST,
             ),
         )
