@@ -14,6 +14,10 @@ import type { SharedGameHostAuthority } from "../security/shared-game-host-autho
 import { registerDeviceAccountRoutes } from "./device-account-routes.js";
 import { registerGameHostRoutes } from "./game-host-routes.js";
 import {
+  registerPublisherRoutes,
+  type PublisherHttpDependencies,
+} from "./publisher-routes.js";
+import {
   AccountSessionExpiringError,
   type SessionTicketService,
   type SeatLeaseRequest,
@@ -26,6 +30,7 @@ export interface HttpDependencies {
   readonly sessionTickets: SessionTicketService;
   readonly gameSessions: GameSessionRegistry;
   readonly gameHost?: SharedGameHostAuthority;
+  readonly publisher?: PublisherHttpDependencies;
   readonly isReady?: () => Promise<boolean>;
 }
 
@@ -267,6 +272,9 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
   app.disable("x-powered-by");
   app.use(express.json({ limit: "32kb", strict: true }));
   registerDeviceAccountRoutes(app, dependencies.accountIdentity);
+  if (dependencies.publisher !== undefined) {
+    registerPublisherRoutes(app, dependencies.publisher);
+  }
 
   app.get("/health", (_request, response) => {
     response.setHeader("Cache-Control", "no-store");

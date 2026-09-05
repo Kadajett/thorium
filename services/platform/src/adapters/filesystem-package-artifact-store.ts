@@ -35,7 +35,20 @@ export class FileSystemPackageArtifactStore implements PackageArtifactStore {
       pending = this.#load(path);
       this.#cache.set(path, pending);
     }
-    return pending;
+    try {
+      const artifact = await pending;
+      if (artifact === undefined && this.#cache.get(path) === pending) {
+        // A public release can appear after an earlier guessed/missing read.
+        // Only immutable, successfully loaded artifacts are safe to cache.
+        this.#cache.delete(path);
+        this.#realRoot = undefined;
+      }
+      return artifact;
+    } catch (error) {
+      if (this.#cache.get(path) === pending) this.#cache.delete(path);
+      this.#realRoot = undefined;
+      throw error;
+    }
   }
 
   async #load(path: string): Promise<PackageArtifact | undefined> {

@@ -222,6 +222,52 @@ export function createTestGamePackageFixture(publicBaseUrl: string): {
   };
 }
 
+export function createRequiresOnlineTestGamePackageFixture(publicBaseUrl: string) {
+  const onlineManifest = {
+    ...manifest,
+    multiplayer: {
+      ...manifest.multiplayer,
+      requiresOnline: true,
+    },
+  } as const;
+  const onlineManifestBytes = Buffer.from(canonicalJson(onlineManifest));
+  const archiveBytes = createStoredZip([
+    ...TEST_RUNTIME_FILES,
+    { path: "thorium.json", bytes: onlineManifestBytes },
+  ]);
+  const descriptor = {
+    ...TEST_GAME_DEPLOY_DESCRIPTOR,
+    manifestSha256: sha256(onlineManifestBytes),
+    bundle: {
+      ...TEST_GAME_DEPLOY_DESCRIPTOR.bundle,
+      sha256: sha256(archiveBytes),
+      sizeBytes: archiveBytes.byteLength,
+    },
+  } as const;
+  const release: GameRelease = {
+    ...onlineManifest,
+    tags: ["test-fixture"],
+    publishedAt: "2026-01-02T03:04:05.000Z",
+    contentDigest: sha256(canonicalJson(descriptor)),
+    bundle: {
+      fileName: descriptor.bundle.fileName,
+      url: publicPackageUrl(publicBaseUrl),
+      sha256: descriptor.bundle.sha256,
+      sizeBytes: descriptor.bundle.sizeBytes,
+      manifestSha256: descriptor.manifestSha256,
+      files: packageFiles,
+    },
+  };
+  return {
+    release,
+    descriptor,
+    artifact: {
+      key: TEST_GAME_ARTIFACT_KEY,
+      bytes: archiveBytes,
+    },
+  };
+}
+
 export function createTestGames(publicBaseUrl: string): readonly GameRelease[] {
   return [createTestGamePackageFixture(publicBaseUrl).release];
 }

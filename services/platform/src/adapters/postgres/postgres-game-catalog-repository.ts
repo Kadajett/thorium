@@ -40,46 +40,69 @@ implements GameCatalogRepository, GameReleasePublicationRepository {
   }
 
   async publish(release: GameRelease): Promise<GameReleasePublicationRepositoryResult> {
-    const inserted = await this.#pool.query<ReleaseRow>(
-      `INSERT INTO thorium_game_releases (
-         package_id,
-         package_version,
-         content_digest,
-         bundle_file_name,
-         bundle_sha256,
-         bundle_size_bytes,
-         published_at,
-         release_json
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-       ON CONFLICT (package_id, package_version) DO NOTHING
-       RETURNING release_json`,
-      [
-        release.packageId,
-        release.version,
-        release.contentDigest,
-        release.bundle.fileName,
-        release.bundle.sha256,
-        release.bundle.sizeBytes,
-        release.publishedAt,
-        JSON.stringify(release),
-      ],
-    );
-    const created = inserted.rows[0];
-    if (created !== undefined) {
-      return { status: "published", release: releaseFromRow(created) };
-    }
+    const client = await this.#pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Operator imports reserve new package namespaces in the same transaction
+      // as metadata publication. A prior public owner is preserved.
+      await client.query(
+        `INSERT INTO thorium_game_package_owners (package_id, publisher_id)
+         VALUES ($1, NULL)
+         ON CONFLICT (package_id) DO NOTHING`,
+        [release.packageId],
+      );
+      const inserted = await client.query<ReleaseRow>(
+        `INSERT INTO thorium_game_releases (
+           package_id,
+           package_version,
+           content_digest,
+           bundle_file_name,
+           bundle_sha256,
+           bundle_size_bytes,
+           published_at,
+           release_json
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+         ON CONFLICT (package_id, package_version) DO NOTHING
+         RETURNING release_json`,
+        [
+          release.packageId,
+          release.version,
+          release.contentDigest,
+          release.bundle.fileName,
+          release.bundle.sha256,
+          release.bundle.sizeBytes,
+          release.publishedAt,
+          JSON.stringify(release),
+        ],
+      );
+      const created = inserted.rows[0];
+      if (created !== undefined) {
+        await client.query("COMMIT");
+        return { status: "published", release: releaseFromRow(created) };
+      }
 
-    const existing = await this.#pool.query<ReleaseRow & { readonly content_digest: string }>(
-      `SELECT content_digest, release_json
-         FROM thorium_game_releases
-        WHERE package_id = $1 AND package_version = $2`,
-      [release.packageId, release.version],
-    );
-    const row = existing.rows[0];
-    if (row === undefined || row.content_digest !== release.contentDigest) {
-      return { status: "conflict" };
+      const existing = await client.query<ReleaseRow & { readonly content_digest: string }>(
+        `SELECT content_digest, release_json
+           FROM thorium_game_releases
+          WHERE package_id = $1 AND package_version = $2`,
+        [release.packageId, release.version],
+      );
+      const row = existing.rows[0];
+      await client.query("COMMIT");
+      if (row === undefined || row.content_digest !== release.contentDigest) {
+        return { status: "conflict" };
+      }
+      return { status: "already-published", release: releaseFromRow(row) };
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // Preserve the publication failure.
+      }
+      throw error;
+    } finally {
+      client.release();
     }
-    return { status: "already-published", release: releaseFromRow(row) };
   }
 
   async findById(packageId: string, version?: string): Promise<GameRelease | undefined> {

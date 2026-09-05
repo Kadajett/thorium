@@ -66,9 +66,10 @@ Required secrets are `ACCOUNT_TOKEN_SECRET` and `SESSION_TICKET_SECRET` (at leas
   default is empty. For Android WebViews this will typically include the host's
   configured asset origin, such as `https://appassets.androidplatform.net`.
   Native Android HTTP/WebSocket clients omit `Origin` and do not need an entry.
-- `PACKAGE_ARTIFACT_DIRECTORY`: root of the read-only filesystem artifact
-  adapter. It defaults to `./artifacts` locally and to
-  `/var/lib/thorium/packages` in the container.
+- `PACKAGE_ARTIFACT_DIRECTORY`: root of the immutable filesystem package store.
+  It defaults to `./artifacts` locally and to `/var/lib/thorium/packages` in the
+  container. Production must mount it read-write when self-service publishing
+  is enabled; package files become read-only after their atomic publication.
 - `DATABASE_URL`: PostgreSQL connection URL. It is optional for local
   development and required when `NODE_ENV=production`. Startup applies
   immutable, checksum-recorded migrations transactionally under a database
@@ -87,12 +88,101 @@ PACKAGE_ARTIFACT_DIRECTORY/
 Missing roots or files produce a package 404. A stored archive whose verified
 size or digest differs from the catalog is never served.
 
-## Publishing a Game Release
+## Self-service Game Release publishing
 
-Publication is an offline operator action, not a public HTTP endpoint. Stage a
-deploy descriptor and its matching ZIP on a read-only input volume, then run
-the platform image as a one-shot Job with the existing `DATABASE_URL`,
-`PUBLIC_BASE_URL`, and a read-write mount of `PACKAGE_ARTIFACT_DIRECTORY`:
+The public publisher API is a deliberately small first-night flow. It creates
+or logs in a publisher from HTTP Basic credentials, returns one opaque scoped
+publish token, then accepts the deploy descriptor and ZIP produced by
+`thorium-game pack`. It has no email or account-registration dependency.
+
+Choose a 3-40 character username using lowercase letters, numbers, `.`, `_`,
+or `-`, and a password with at least 12 Unicode characters, at most 256 UTF-8
+bytes, and no control characters. Usernames are normalized to lowercase. Ask
+`curl` to prompt for the password so the Basic
+credential is not placed in shell history or its process arguments:
+
+```sh
+umask 077
+export THORIUM_PLATFORM_URL=https://games.yougotserved.dev
+curl --fail-with-body --silent --show-error \
+  --user 'your.publisher.name' \
+  --request POST \
+  "$THORIUM_PLATFORM_URL/v1/publishers/token" \
+  > .thorium-publish-token.json
+```
+
+The response is shaped like this:
+
+```json
+{
+  "token": "thp_<opaque 256-bit capability>",
+  "tokenType": "Bearer",
+  "scope": "game:publish"
+}
+```
+
+Give an agent only the returned `thp_...` token, never the Basic username or
+password. Every successful repeat of the Basic exchange rotates the publisher's
+sole token and immediately invalidates the previous one. The server persists a
+salted scrypt password hash and SHA-256 token digest; it never persists or logs
+the password or raw token.
+
+To publish, load the token without typing it into shell history and pass the
+authorization header to `curl` through standard input rather than a visible
+command argument:
+
+```sh
+export THORIUM_PUBLISH_TOKEN="$(jq -er .token < .thorium-publish-token.json)"
+curl --fail-with-body --silent --show-error \
+  --config /dev/stdin \
+  --form 'descriptor=<dist/my-game.deploy.json' \
+  --form 'archive=@dist/my-game.zip;type=application/zip' \
+  "$THORIUM_PLATFORM_URL/v1/publisher/releases" <<CURL
+header = "Authorization: Bearer ${THORIUM_PUBLISH_TOKEN}"
+CURL
+unset THORIUM_PUBLISH_TOKEN
+```
+
+`descriptor` is JSON text limited to 1 MiB. `archive` is one ZIP limited to
+90 MiB so the complete multipart request stays below the current Cloudflare
+100 MB request ceiling. Authorization and capacity checks happen before the
+multipart body is buffered. The server verifies the same manifest, descriptor,
+archive, and per-file integrity contract as the operator importer; releases
+remain content-addressed and immutable. An exact same-owner retry returns
+`already-published`. A package ID is claimed by its first publisher, and a
+different publisher cannot release any version under it. Existing operator
+package IDs are permanently reserved from self-service claims.
+
+Self-service accepts only untrusted `web-v1` client packages. It does not load
+server-side JavaScript or database migrations from an uploaded ZIP. Packages
+may use the bounded generic `game_session` transport, but a manifest with
+`multiplayer.requiresOnline: true` is rejected with `server_module_required`.
+Game-specific matchmaking or world authority, such as the Cinder and Serpent
+servers, remains a separately reviewed and operator-signed game-host module
+deployment.
+
+First-night containment is intentionally conservative: five package IDs and
+1 GiB of reserved releases per publisher, 10 GiB globally, six publish attempts
+per publisher per hour, six publish attempts per source IP per minute, five
+Basic exchanges per source IP per minute, and two concurrent buffered
+publication requests per platform process. Byte/package reservations are
+durable PostgreSQL state. Attempt limits and concurrency are process-local and
+reset on restart, so a multi-replica deployment still requires edge rate
+limits. The public origin must be reachable only through the trusted Cloudflare
+path when `CF-Connecting-IP` is used for client addressing.
+
+Production startup applies `0003_self_service_publishers.sql` automatically.
+The long-running platform now requires a read-write mount of the existing
+`PACKAGE_ARTIFACT_DIRECTORY`; no additional application secret or environment
+variable is required.
+
+## Operator Game Release import
+
+The operator importer remains available for reserved packages and reviewed
+releases. Stage a deploy descriptor and its matching ZIP on a read-only input
+volume, then run the platform image as a one-shot Job with the existing
+`DATABASE_URL`, `PUBLIC_BASE_URL`, and a read-write mount of
+`PACKAGE_ARTIFACT_DIRECTORY`:
 
 ```sh
 node dist/publication/import-game-release.js \
@@ -105,8 +195,9 @@ and every declared file before atomically storing immutable bytes and then
 cataloging the exact release. Identical reruns are safe; package/version or
 artifact reuse with different content is rejected. Kubernetes RBAC controls
 who may create the Job and access its database Secret and read-write package
-PVC, so no publisher credential is exposed through the application API. The
-long-running platform should mount the same package PVC read-only.
+PVC, so no publisher credential is exposed to the Job. Operator imports reserve
+their package IDs against later public claims. The long-running platform shares
+the same package PVC read-write with the self-service endpoint.
 
 ## Container
 

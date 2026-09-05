@@ -19,6 +19,7 @@
     "@colyseus/ws-transport": "0.18.2",
     "express": "5.2.1",
     "jose": "6.2.10",
+    "multer": "2.3.0",
     "pg": "8.23.0",
     "zod": "4.5.4"
   },
@@ -27,6 +28,7 @@
     "@colyseus/testing": "0.18.5",
     "@colyseus/tools": "0.18.3",
     "@types/express": "5.0.5",
+    "@types/multer": "2.2.0",
     "@types/node": "24.10.1",
     "@types/pg": "8.23.1",
     "@types/supertest": "6.0.3",

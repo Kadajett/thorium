@@ -6,7 +6,10 @@ import { InMemoryGameCatalogRepository } from "./adapters/in-memory-game-catalog
 import { InMemoryGameSessionRegistry } from "./adapters/in-memory-game-session-registry.js";
 import { PostgresGameCatalogRepository } from "./adapters/postgres/postgres-game-catalog-repository.js";
 import { PostgresGameSessionRegistry } from "./adapters/postgres/postgres-game-session-registry.js";
+import { PostgresPublisherRepository } from "./adapters/postgres/postgres-publisher-repository.js";
 import { runPostgresMigrations } from "./adapters/postgres/postgres-migrations.js";
+import { FileSystemPackageArtifactPublicationStore } from
+  "./adapters/filesystem-package-artifact-publication-store.js";
 import { createSampleGames } from "./catalog/sample-games.js";
 import type { PlatformEnvironment } from "./config.js";
 import {
@@ -22,6 +25,10 @@ import { createGameSessionRoom } from "./rooms/game-session-room.js";
 import { HmacAccountTokenAdapter } from "./security/account-token-adapter.js";
 import { SessionTicketService } from "./security/session-ticket-service.js";
 import { SharedGameHostAuthority } from "./security/shared-game-host-authority.js";
+import { PublisherAccessService } from "./security/publisher-access-service.js";
+import { GameReleasePublisher } from "./publication/game-release-publisher.js";
+import { PublisherPublicationService } from
+  "./publication/publisher-publication-service.js";
 
 export interface PlatformDependencies extends HttpDependencies {
   readonly beforeListen?: () => Promise<void>;
@@ -38,9 +45,11 @@ export function createPlatformDependencies(
   const pool = environment.DATABASE_URL === undefined
     ? undefined
     : new Pool({ connectionString: environment.DATABASE_URL });
-  const catalog = pool === undefined
-    ? new InMemoryGameCatalogRepository(createSampleGames(environment.PUBLIC_BASE_URL))
+  const postgresCatalog = pool === undefined
+    ? undefined
     : new PostgresGameCatalogRepository(pool);
+  const catalog = postgresCatalog
+    ?? new InMemoryGameCatalogRepository(createSampleGames(environment.PUBLIC_BASE_URL));
   const packageArtifacts = new FileSystemPackageArtifactStore(environment.PACKAGE_ARTIFACT_DIRECTORY);
   const accountIdentity = new HmacAccountTokenAdapter(environment.ACCOUNT_TOKEN_SECRET);
   const gameSessions = pool === undefined
@@ -59,6 +68,24 @@ export function createPlatformDependencies(
       serviceTokenFile: environment.GAME_HOST_SERVICE_TOKEN_FILE!,
       scopeSecret: environment.SESSION_TICKET_SECRET,
     });
+  const publisherRepository = pool === undefined
+    ? undefined
+    : new PostgresPublisherRepository(pool);
+  const publisher = publisherRepository === undefined || postgresCatalog === undefined
+    ? undefined
+    : {
+      access: new PublisherAccessService(publisherRepository),
+      publication: new PublisherPublicationService({
+        authorization: publisherRepository,
+        publisher: new GameReleasePublisher({
+          artifacts: new FileSystemPackageArtifactPublicationStore(
+            environment.PACKAGE_ARTIFACT_DIRECTORY,
+          ),
+          releases: postgresCatalog,
+          publicBaseUrl: environment.PUBLIC_BASE_URL,
+        }),
+      }),
+    };
   return {
     catalog,
     packageArtifacts,
@@ -66,6 +93,7 @@ export function createPlatformDependencies(
     sessionTickets,
     gameSessions,
     ...(gameHost === undefined ? {} : { gameHost }),
+    ...(publisher === undefined ? {} : { publisher }),
     beforeListen: async () => {
       await gameHost?.ready();
       if (pool !== undefined) await runPostgresMigrations(pool);

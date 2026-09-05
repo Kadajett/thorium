@@ -4,6 +4,7 @@ import type {
 import type {
   PackageArtifactPublicationStore,
 } from "../ports/package-artifact-publication-store.js";
+import type { GameRelease } from "../domain/game-package.js";
 import { verifyPublishedGameRelease } from "./verify-game-release.js";
 
 export interface GameReleasePublisherDependencies {
@@ -30,7 +31,9 @@ export class GameReleasePublisher {
   async publish(input: {
     readonly descriptor: unknown;
     readonly archive: { readonly fileName: string; readonly bytes: Uint8Array };
-  }) {
+  }, options: {
+    readonly authorize?: (release: GameRelease) => Promise<void>;
+  } = {}) {
     let verified;
     try {
       verified = verifyPublishedGameRelease({
@@ -41,6 +44,8 @@ export class GameReleasePublisher {
     } catch {
       throw new GameReleasePublicationError("invalid_release");
     }
+
+    await options.authorize?.(verified.release);
 
     const artifactResult = await this.#dependencies.artifacts.publish({
       key: {

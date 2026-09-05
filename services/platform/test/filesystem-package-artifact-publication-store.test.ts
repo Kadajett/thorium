@@ -32,7 +32,9 @@ describe("FileSystemPackageArtifactPublicationStore", () => {
       sha256: fixture.release.bundle.sha256,
       sizeBytes: fixture.release.bundle.sizeBytes,
     };
+    const reader = new FileSystemPackageArtifactStore(root);
 
+    await expect(reader.read(TEST_GAME_ARTIFACT_KEY)).resolves.toBeUndefined();
     await expect(writer.publish(publication)).resolves.toBe("published");
     await expect(writer.publish(publication)).resolves.toBe("already-published");
     const conflictingBytes = Buffer.from("different immutable bytes");
@@ -43,7 +45,7 @@ describe("FileSystemPackageArtifactPublicationStore", () => {
       sizeBytes: conflictingBytes.byteLength,
     })).resolves.toBe("conflict");
 
-    const stored = await new FileSystemPackageArtifactStore(root).read(TEST_GAME_ARTIFACT_KEY);
+    const stored = await reader.read(TEST_GAME_ARTIFACT_KEY);
     expect(stored).toEqual({
       bytes: fixture.artifact.bytes,
       sha256: fixture.release.bundle.sha256,
