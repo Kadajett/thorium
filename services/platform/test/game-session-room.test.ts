@@ -13,8 +13,16 @@ describe("game_session room", () => {
   const harness = createTestHarness();
   let colyseus: ColyseusTestServer;
 
+  async function startTestServer(): Promise<ColyseusTestServer> {
+    const server = await boot(createPlatformServer(harness.dependencies));
+    // The shutdown test restarts this listener on the same port. Do not let
+    // Node's shared fetch pool reuse an idle socket from the previous server.
+    server.sdk.http.options.headers = { Connection: "close" };
+    return server;
+  }
+
   beforeAll(async () => {
-    colyseus = await boot(createPlatformServer(harness.dependencies));
+    colyseus = await startTestServer();
   });
 
   beforeEach(async () => {
@@ -243,7 +251,7 @@ describe("game_session room", () => {
       expect(reportedErrors.flat().map(String).join("\n")).not.toContain("disposing");
     } finally {
       errorSpy.mockRestore();
-      colyseus = await boot(createPlatformServer(harness.dependencies));
+      colyseus = await startTestServer();
     }
   });
 
