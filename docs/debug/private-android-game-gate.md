@@ -151,6 +151,28 @@ remote and were not published. Frozen ZIPs remain in each game's ignored
 `vector-drift/artifacts/adb/vector-drift-four-core-active.json`; that diagnostic
 included canvas inspection during collection and is not a final clean FPS run.
 
+## Startup/focus finding and clean rerun
+
+At close-out, process 3122 was no longer alive. Android's exit history records an
+ANR trace created at 10:25:10 local time, during the first post-reboot private
+launch and immediate display-0 key injection. The reason is `Application does
+not have a focused window`; the sampled main thread waits in HWUI
+`DrawFrameTask::drawFrame` / `HardwareRenderer.syncAndDrawFrame`. The process was
+eventually removed at 10:43:55. This is not enough to distinguish an emulator
+startup/rendering delay from a general launch/focus defect, and it is not a
+verified physical Thor bug or fix. The trace is preserved as
+`vector-drift/artifacts/adb/startup-no-focused-window-anr.gz` (the trace was
+created earlier during the word candidate's startup in the same app process).
+
+A clean private Vector launch created process 6749. Both surfaces reported
+`web-ready active=true` before any key was injected. Native throttle was then
+sent without forcing display 0, using Android's focused display. A 30-second
+run without canvas inspection measured 59.17 FPS on main; the deliberately
+10 Hz dashboard was advisory-only. Both frame histories had continuous
+coverage, the process stayed alive, and no new exit-history ANR appeared.
+Raw evidence: `vector-drift/artifacts/adb/vector-clean-cold-launch.json`.
+The clean rerun still fails the strict 60 FPS threshold.
+
 ## Screenshot caveat
 
 On this WebView/emulator combination, CDP `Page.captureScreenshot` can omit an
