@@ -205,6 +205,7 @@ export class GameModuleLoader {
     await mkdir(stateDirectory, { recursive: true });
     await assertDirectory(stateDirectory);
     const localRoomNames = new Set(descriptor.rooms.map((room) => room.localName));
+    const scopedRegistry = this.#registry.scoped(pathRelease);
     const imported = await import(`${pathToFileURL(entrypoint).href}?digest=${pathRelease.contentDigest}`) as {
       readonly createThoriumGameModule?: CreateThoriumGameModule;
     };
@@ -217,8 +218,12 @@ export class GameModuleLoader {
       endpoint: this.#endpoint,
       stateDirectory,
       roomName: (localName) => physicalRoomName(pathRelease, localName),
-      admission: this.#admission.scoped(pathRelease, (name) => localRoomNames.has(name)),
-      registry: this.#registry.scoped(pathRelease),
+      admission: this.#admission.scoped(
+        pathRelease,
+        (name) => localRoomNames.has(name),
+        (fence) => scopedRegistry.isActive(fence),
+      ),
+      registry: scopedRegistry,
     });
     try {
       validateModule(descriptor, gameModule);

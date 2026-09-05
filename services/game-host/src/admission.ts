@@ -201,6 +201,7 @@ export class AdmissionService {
   scoped(
     release: ExactGameRelease,
     isRegisteredLocalRoom: (name: string) => boolean,
+    isFenceActive: (fence: RegistryFence) => Promise<boolean>,
   ): GameHostAdmissionPort {
     return {
       verifyPlatform: async (token, expected) => {
@@ -241,6 +242,9 @@ export class AdmissionService {
           || source.generation !== fence.generation
           || !isRegisteredLocalRoom(request.targetLocalRoomName)
         ) throw new Error("transfer_parent_scope_mismatch");
+        if (!await isFenceActive(fence)) {
+          throw new Error("inactive_or_superseded_registry_fence");
+        }
         const moduleClaims = boundedJsonObject(request.moduleClaims, "module_claims");
         const joinOptions = boundedJsonObject(request.joinOptions, "join_options");
         const nowSeconds = Math.floor(this.#now().getTime() / 1_000);
@@ -248,11 +252,10 @@ export class AdmissionService {
         if (!Number.isInteger(requestedLifetime) || requestedLifetime < 1 || requestedLifetime > 30) {
           throw new Error("invalid_transfer_lifetime");
         }
-        const expiry = Math.min(
-          nowSeconds + requestedLifetime,
-          Math.floor(source.expiresAtEpochMs / 1_000),
-        );
-        if (expiry <= nowSeconds) throw new Error("parent_admission_expired");
+        // The durable registry fence, not an already-consumed ticket's expiry,
+        // is the renewable authority for a running session. Every transfer is
+        // still independently one-use and capped at 30 seconds.
+        const expiry = nowSeconds + requestedLifetime;
         const roomName = physicalRoomName(release, request.targetLocalRoomName);
         const token = await new SignJWT({
           gameSessionId: source.gameSessionId,
