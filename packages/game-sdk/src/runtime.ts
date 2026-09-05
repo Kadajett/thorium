@@ -1,4 +1,5 @@
 import { createHostClient, HostClient } from "./host.js";
+import { createFramePerformanceOverlay } from "./frame-performance.js";
 import {
   SurfaceRole,
   type DualSurfaceGame,
@@ -21,6 +22,8 @@ export interface RunGameOptions {
   readonly frameDriver?: FrameDriver;
   readonly autoResize?: boolean;
   readonly maximumDeltaMs?: number;
+  /** Per-surface game-loop FPS / average frame interval. Enabled by default. */
+  readonly fpsOverlay?: boolean;
 }
 
 export interface RunningGame {
@@ -105,6 +108,7 @@ export async function runGame(
   };
   await game.start(context);
   host.ready();
+  const performanceOverlay = options.fpsOverlay === false ? undefined : createFramePerformanceOverlay();
 
   let stopped = false;
   let active = true;
@@ -119,6 +123,7 @@ export async function runGame(
     previousNow = nowMs;
     game.tick({ number: frameNumber++, nowMs, deltaMs });
     host.flushPeerMessages();
+    performanceOverlay?.frame(nowMs);
     frameHandle = driver.request(frame);
   };
   frameHandle = driver.request(frame);
@@ -127,6 +132,7 @@ export async function runGame(
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    performanceOverlay?.remove();
     driver.cancel(frameHandle);
     resizeObserver?.disconnect();
     if (fallbackResize) window.removeEventListener("resize", fallbackResize);
@@ -137,6 +143,7 @@ export async function runGame(
       active = false;
       driver.cancel(frameHandle);
       previousNow = undefined;
+      performanceOverlay?.reset();
     } else if (state === "active" && !active && !stopped) {
       active = true;
       frameHandle = driver.request(frame);

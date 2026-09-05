@@ -15,6 +15,25 @@ const game: DualSurfaceGame = {
 await runGame(game);
 ```
 
+SDK 0.1.2 shows a small, non-interactive FPS counter on each surface by default.
+It samples completed `tick` calls from the existing game loop, updating the label
+once per second with FPS and average frame interval in milliseconds. It is not
+server tick rate, GPU presentation telemetry, or the CPU duration of `tick`.
+Sampling resets on suspension and the overlay is removed on stop. It makes no
+network requests and never takes controller focus or intercepts touch.
+
+Developers can disable it per surface entrypoint:
+
+```ts
+await runGame(game, { fpsOverlay: false });
+```
+
+Rebuild and publish a new immutable Game Release to adopt the counter; already
+published archives are unchanged. The feature adds no Host Bridge requirements:
+games using only the existing protocol may retain `sdkCompatibility: "^0.1.1"`
+and run on Android dev.9 without a new APK. Custom loops that bypass `runGame`
+do not automatically receive the counter.
+
 The native Android host injects only the origin-scoped `window.thoriumHost.postMessage()` object supplied by `WebViewCompat.addWebMessageListener`. Bootstrap uses a request/response protocol:
 
 ```text
