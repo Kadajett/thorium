@@ -5,6 +5,12 @@ left-stick motion highlighted the top game surface; library controller input did
 not work although touch did. This disproves the earlier visibility/onPause change
 as a sufficient fix for the physical issue. That correction remains intact.
 
+Follow-up after the dev.7 update: the user again reports that a full close/reopen
+fixed nothing and Serpent remains black. The task/input changes below are not a
+verified fix for that physical report. The live catalog was checked again and
+still serves Serpent 0.1.2; the public APK is dev.7. Device access and an actual
+Android/WebView reproduction are the next evidence gate, not another restart.
+
 ## Evidence and corrections
 
 The Activity delegated D-pad keys to framework focus, and its stick commands

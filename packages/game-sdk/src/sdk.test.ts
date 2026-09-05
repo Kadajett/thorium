@@ -455,6 +455,55 @@ test("browser transport requests bootstrap through postMessage and matches the r
   assert.equal(JSON.stringify(sent).includes("single-use"), false);
 });
 
+test("both native surface bootstraps accept generated shared-host room names", async () => {
+  const device = createTestDevice({
+    gameId: "dev.yougotserved.test-game",
+    accountSessions: twoPlayersOneAccount,
+    controls: validManifest.controls,
+  });
+  const roomName = `g_${"a".repeat(32)}`;
+  for (const surface of [device.main, device.companion]) {
+    const base = surface.bootstrap;
+    const bootstrap: GameBootstrap = {
+      ...base,
+      colyseus: {
+        endpoint: "https://games.yougotserved.dev",
+        roomName,
+        ticket: "synthetic-one-use-ticket",
+        expiresAtEpochMs: Date.now() + 60_000,
+        joinOptions: {
+          gameSessionId: base.game.instanceId,
+          packageId: base.game.id,
+          packageVersion: base.game.version,
+          packageDigest: "b".repeat(64),
+        },
+      },
+    };
+    const fakeWindow = {
+      addEventListener: () => undefined,
+      thoriumHost: { postMessage(raw: string) {
+        const request = JSON.parse(raw) as HostOutboundMessage;
+        if (request.kind === "bootstrap-request") {
+          // Native WebSurface delivers a serialized envelope, not a fixture object.
+          fakeWindow.__thoriumReceive?.(JSON.stringify({
+            kind: "bootstrap", requestId: request.requestId, bootstrap,
+          }));
+        }
+      } },
+    } as unknown as Window;
+    const transport = new BrowserHostTransport(fakeWindow, 100);
+    const received = await transport.readBootstrap();
+    const host = new HostClient(received, transport);
+    assert.equal(host.bootstrap.surface, base.surface);
+    assert.equal(host.takeColyseusTicket()?.roomName, roomName);
+    for (const invalidName of ["", "Room", "../room", "g_" + "a".repeat(63)]) {
+      assert.throws(() => new HostClient({
+        ...bootstrap, colyseus: { ...bootstrap.colyseus!, roomName: invalidName },
+      }, transport), /invalid Colyseus session capability/);
+    }
+  }
+});
+
 test("manual frame driver makes the two-method surface interface deterministic in tests", async () => {
   const device = createTestDevice({
     gameId: "dev.yougotserved.test-game",
