@@ -24,6 +24,12 @@ const BrowserOriginsSchema = z.string().default("").transform((value, context) =
   return [...new Set(origins)];
 });
 
+const HttpsEndpointSchema = z.string().trim().url().refine((value) => {
+  const endpoint = new URL(value);
+  return endpoint.protocol === "https:" && endpoint.username === ""
+    && endpoint.password === "" && endpoint.search === "" && endpoint.hash === "";
+}, "must be an HTTPS endpoint without credentials, query, or fragment");
+
 const EnvironmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(2_567),
@@ -35,6 +41,9 @@ const EnvironmentSchema = z.object({
   ACCOUNT_TOKEN_SECRET: z.string().min(32),
   SESSION_TICKET_SECRET: z.string().min(32),
   SESSION_TICKET_TTL_SECONDS: z.coerce.number().int().min(15).max(120).default(60),
+  GAME_HOST_PUBLIC_ENDPOINT: HttpsEndpointSchema.optional(),
+  GAME_HOST_ADMISSION_PRIVATE_KEY_FILE: z.string().trim().min(1).optional(),
+  GAME_HOST_SERVICE_TOKEN_FILE: z.string().trim().min(1).optional(),
 }).superRefine((environment, context) => {
   const publicUrl = new URL(environment.PUBLIC_BASE_URL);
   if (environment.NODE_ENV === "production" && publicUrl.protocol !== "https:") {
@@ -70,6 +79,19 @@ const EnvironmentSchema = z.object({
       code: "custom",
       path: ["PUBLIC_BASE_URL"],
       message: "PUBLIC_BASE_URL must not contain credentials, a query, or a fragment",
+    });
+  }
+  const gameHostValues = [
+    environment.GAME_HOST_PUBLIC_ENDPOINT,
+    environment.GAME_HOST_ADMISSION_PRIVATE_KEY_FILE,
+    environment.GAME_HOST_SERVICE_TOKEN_FILE,
+  ];
+  if (gameHostValues.some((value) => value !== undefined)
+      && gameHostValues.some((value) => value === undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["GAME_HOST_PUBLIC_ENDPOINT"],
+      message: "GAME_HOST_PUBLIC_ENDPOINT, GAME_HOST_ADMISSION_PRIVATE_KEY_FILE, and GAME_HOST_SERVICE_TOKEN_FILE must be configured together",
     });
   }
 });

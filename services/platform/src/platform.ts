@@ -21,6 +21,7 @@ import {
 import { createGameSessionRoom } from "./rooms/game-session-room.js";
 import { HmacAccountTokenAdapter } from "./security/account-token-adapter.js";
 import { SessionTicketService } from "./security/session-ticket-service.js";
+import { SharedGameHostAuthority } from "./security/shared-game-host-authority.js";
 
 export interface PlatformDependencies extends HttpDependencies {
   readonly beforeListen?: () => Promise<void>;
@@ -50,16 +51,28 @@ export function createPlatformDependencies(
     endpoint: environment.PUBLIC_BASE_URL,
     ttlSeconds: environment.SESSION_TICKET_TTL_SECONDS,
   });
+  const gameHost = environment.GAME_HOST_PUBLIC_ENDPOINT === undefined
+    ? undefined
+    : new SharedGameHostAuthority({
+      endpoint: environment.GAME_HOST_PUBLIC_ENDPOINT,
+      admissionPrivateKeyFile: environment.GAME_HOST_ADMISSION_PRIVATE_KEY_FILE!,
+      serviceTokenFile: environment.GAME_HOST_SERVICE_TOKEN_FILE!,
+      scopeSecret: environment.SESSION_TICKET_SECRET,
+    });
   return {
     catalog,
     packageArtifacts,
     accountIdentity,
     sessionTickets,
     gameSessions,
+    ...(gameHost === undefined ? {} : { gameHost }),
+    beforeListen: async () => {
+      await gameHost?.ready();
+      if (pool !== undefined) await runPostgresMigrations(pool);
+    },
     ...(pool === undefined
       ? {}
       : {
-        beforeListen: () => runPostgresMigrations(pool),
         isReady: async () => {
           await pool.query("SELECT 1");
           return true;

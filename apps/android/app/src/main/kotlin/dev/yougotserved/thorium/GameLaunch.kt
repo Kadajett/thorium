@@ -17,7 +17,7 @@ data class ColyseusSessionCapability(
             uri != null && uri.scheme.lowercase() in setOf("https", "wss") &&
                 !uri.host.isNullOrEmpty() && uri.userInfo == null && uri.rawFragment == null,
         ) { "Invalid Colyseus endpoint" }
-        require(roomName == "game_session") { "Invalid Colyseus room" }
+        require(ColyseusRoomNamePolicy.accepts(roomName)) { "Invalid Colyseus room" }
         require(ticket.isNotBlank() && ticket.length <= 4096) { "Invalid Colyseus ticket" }
         require(expiresAtEpochMs > 0) { "Invalid Colyseus ticket expiry" }
         require(joinOptions.keys == JOIN_OPTION_KEYS && joinOptions.values.all(String::isNotEmpty)) {
@@ -62,6 +62,12 @@ data class ColyseusSessionCapability(
             )
         }
     }
+}
+
+internal object ColyseusRoomNamePolicy {
+    private val ROOM_NAME = Regex("^[a-z][a-z0-9_]{0,63}$")
+
+    fun accepts(value: String): Boolean = ROOM_NAME.matches(value)
 }
 
 data class GameLaunch(

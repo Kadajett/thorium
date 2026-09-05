@@ -60,6 +60,8 @@ export interface GameSessionRoomFence {
   readonly generation: number;
   /** Opaque Colyseus room identity bound by the first admitted surface. */
   readonly roomInstanceId: string;
+  /** Delegated services must additionally fence against their registered exact release. */
+  readonly release?: ExactGameRelease;
 }
 
 export interface AdmitGameSessionSurface extends GameSessionSurfaceGrant, GameSessionRoomFence {
@@ -99,6 +101,7 @@ export type FinishGameSessionConflictCode =
   | "SESSION_NOT_FOUND"
   | "GENERATION_MISMATCH"
   | "ROOM_FENCE_MISMATCH"
+  | "RELEASE_SCOPE_MISMATCH"
   | "SESSION_SUPERSEDED";
 
 export type FinishGameSessionResult =

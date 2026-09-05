@@ -4,7 +4,7 @@ import type { ColyseusSessionTicket, GameHost } from "./types.js";
 export interface AuthoritativeSessionClient<TRoom = Room> {
   readonly auth: { token: string | undefined };
   joinOrCreate(
-    roomName: "game_session",
+    roomName: string,
     options: ColyseusSessionTicket["joinOptions"],
   ): Promise<TRoom>;
 }

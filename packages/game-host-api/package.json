@@ -1,0 +1,27 @@
+{
+  "name": "@thorium/game-host-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stable server-module contract for Thorium's shared multiplayer host",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/*.test.js",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@colyseus/core": "0.18.10",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

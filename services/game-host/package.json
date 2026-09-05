@@ -1,0 +1,33 @@
+{
+  "name": "@thorium/game-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@colyseus/core": "0.18.10",
+    "@colyseus/schema": "5.0.27",
+    "@colyseus/ws-transport": "0.18.2",
+    "@thorium/game-host-api": "workspace:*",
+    "express": "5.2.1",
+    "jose": "6.2.10",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "0.18.2",
+    "@types/express": "5.0.5",
+    "@types/node": "24.10.1",
+    "supertest": "7.2.2",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

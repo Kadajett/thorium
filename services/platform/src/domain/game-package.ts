@@ -59,9 +59,11 @@ export interface GameRelease {
     readonly maxSlots: number;
     readonly maxLocalSlots: number;
     readonly sameAccountMultipleSlots: boolean;
+    readonly defaultLocalSeatPlan?: Readonly<Record<SurfaceRole, readonly number[]>>;
   };
   readonly multiplayer: {
     readonly online: boolean;
+    readonly requiresOnline?: boolean;
     readonly roomName: "game_session";
     readonly protocol: "thorium-game-channel-v1";
   };

@@ -75,4 +75,23 @@ describe("platform configuration", () => {
       DATABASE_URL: "https://database.example/thorium",
     })).toThrow(/PostgreSQL/);
   });
+
+  it("accepts only an all-or-none shared game host configuration", () => {
+    expect(() => loadEnvironment({
+      ...SECRETS,
+      NODE_ENV: "test",
+      GAME_HOST_PUBLIC_ENDPOINT: "https://games.yougotserved.dev/play",
+    })).toThrow(/must be configured together/);
+
+    const environment = loadEnvironment({
+      ...SECRETS,
+      NODE_ENV: "test",
+      GAME_HOST_PUBLIC_ENDPOINT: "https://games.yougotserved.dev/play",
+      GAME_HOST_ADMISSION_PRIVATE_KEY_FILE: "/run/thorium/platform-admission-private.pem",
+      GAME_HOST_SERVICE_TOKEN_FILE: "/run/thorium/game-host-service-token",
+    });
+    expect(environment.GAME_HOST_PUBLIC_ENDPOINT).toBe(
+      "https://games.yougotserved.dev/play",
+    );
+  });
 });

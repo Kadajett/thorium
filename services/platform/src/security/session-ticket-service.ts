@@ -30,7 +30,7 @@ export interface SurfaceSessionTicket {
 export interface SessionTicketBundle {
   readonly endpoint: string;
   readonly gameSessionId: string;
-  readonly roomName: "game_session";
+  readonly roomName: string;
   readonly expiresAt: string;
   readonly joinOptions: {
     readonly gameSessionId: string;

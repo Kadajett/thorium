@@ -51,7 +51,7 @@ export interface PeerEvent {
 export interface ColyseusSessionTicket {
   /** HTTPS/WSS origin owned by the Thorium platform. */
   readonly endpoint: string;
-  readonly roomName: "game_session";
+  readonly roomName: string;
   readonly roomId?: string;
   /** Short-lived, single-use credential passed as a Colyseus join option. */
   readonly ticket: string;

@@ -14,6 +14,8 @@ require(
         catalogUri.rawQuery == null && catalogUri.rawFragment == null &&
         (catalogUri.rawPath.isNullOrEmpty() || catalogUri.rawPath == "/"),
 ) { "thoriumCatalogBaseUrl must be an absolute HTTPS URL without credentials, query, or fragment" }
+val developerKeystorePath = System.getenv("THORIUM_ANDROID_KEYSTORE_PATH")
+val developerKeystorePassword = System.getenv("THORIUM_ANDROID_KEYSTORE_PASSWORD")
 
 android {
     namespace = "dev.yougotserved.thorium"
@@ -29,10 +31,22 @@ android {
         buildConfigField("String", "CATALOG_BASE_URL", "\"${catalogBaseUrl.trimEnd('/')}\"")
     }
 
+    signingConfigs {
+        if (!developerKeystorePath.isNullOrBlank() && !developerKeystorePassword.isNullOrBlank()) {
+            create("ciDeveloper") {
+                storeFile = file(developerKeystorePath)
+                storePassword = developerKeystorePassword
+                keyAlias = "thorium-developer"
+                keyPassword = developerKeystorePassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            signingConfigs.findByName("ciDeveloper")?.let { signingConfig = it }
         }
         release {
             isMinifyEnabled = true

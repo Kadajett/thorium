@@ -87,7 +87,7 @@ class GameSessionLauncher internal constructor(
         require(session.joinOptions.packageVersion == request.release.version)
         require(session.joinOptions.packageDigest == request.release.contentDigest)
         require(session.expiresAtEpochMs > nowEpochMs() + MINIMUM_CAPABILITY_LIFETIME_MS)
-        require(session.roomName == ROOM_NAME)
+        require(ColyseusRoomNamePolicy.accepts(session.roomName))
         require(session.surfaces.size == request.surfaces.size)
 
         val requestedById = request.surfaces.associateBy(RequestedSurface::surfaceId)
@@ -165,7 +165,6 @@ class GameSessionLauncher internal constructor(
 
     companion object {
         private const val COLYSEUS_SESSION = "colyseus-session"
-        private const val ROOM_NAME = "game_session"
         private const val MINIMUM_CAPABILITY_LIFETIME_MS = 1_000L
         private const val MAX_TICKET_LENGTH = 4_096
 
@@ -420,8 +419,10 @@ internal class HttpGameSessionAuthorityAdapter private constructor(
             val root = JSONObject(raw).also { it.requireExactKeys(RESPONSE_KEYS) }
             val endpoint = root.requiredString("endpoint", 2_048).also(::requireCapabilityEndpoint)
             val gameSessionId = root.requiredUuid("gameSessionId")
-            val roomName = root.requiredString("roomName", 32)
-            if (roomName != "game_session") throw GameSessionAuthorityContractException()
+            val roomName = root.requiredString("roomName", 64)
+            if (!ColyseusRoomNamePolicy.accepts(roomName)) {
+                throw GameSessionAuthorityContractException()
+            }
             val expiresAt = Instant.parse(root.requiredString("expiresAt", 64)).toEpochMilli()
             if (expiresAt <= nowEpochMs) throw GameSessionAuthorityContractException()
 

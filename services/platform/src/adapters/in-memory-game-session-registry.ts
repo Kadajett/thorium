@@ -215,6 +215,7 @@ export class InMemoryGameSessionRegistry implements GameSessionRegistry {
     if (session === undefined) {
       return finishConflict("SESSION_NOT_FOUND", "The Game Session does not exist.");
     }
+    if (input.release !== undefined && !sameRelease(session.activation.release, input.release)) return finishConflict("RELEASE_SCOPE_MISMATCH", "The delegated service cannot finish another exact release.");
     if (session.activation.generation !== input.generation) {
       return finishConflict(
         "GENERATION_MISMATCH",
@@ -252,6 +253,7 @@ export class InMemoryGameSessionRegistry implements GameSessionRegistry {
       && session.status === "active"
       && session.activation.generation === input.generation
       && session.roomInstanceId === input.roomInstanceId
+      && (input.release === undefined || sameRelease(session.activation.release, input.release))
       && this.#activeByAccount.get(session.accountId) === input.gameSessionId;
   }
 }

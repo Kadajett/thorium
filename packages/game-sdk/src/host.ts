@@ -397,7 +397,7 @@ export function assertBootstrap(value: unknown): asserts value is GameBootstrap 
     const joinOptionKeys = joinOptions ? Object.keys(joinOptions).sort() : [];
     if (
       (endpoint.protocol !== "https:" && endpoint.protocol !== "wss:") ||
-      bootstrap.colyseus.roomName !== "game_session" ||
+      (typeof bootstrap.colyseus.roomName !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(bootstrap.colyseus.roomName)) ||
       bootstrap.colyseus.ticket.length === 0 ||
       !Number.isFinite(bootstrap.colyseus.expiresAtEpochMs) ||
       !joinOptions ||

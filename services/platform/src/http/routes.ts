@@ -6,10 +6,13 @@ import express, {
 } from "express";
 import { z } from "zod";
 import type { GameRelease, SurfaceRole } from "../domain/game-package.js";
-import type { AccountIdentityPort, AccountSession } from "../ports/account-identity.js";
+import type { AccountSession, DeviceAccountIdentityPort } from "../ports/account-identity.js";
 import type { GameCatalogRepository } from "../ports/game-catalog-repository.js";
 import type { PackageArtifactStore } from "../ports/package-artifact-store.js";
 import type { GameSessionRegistry } from "../session-registry/game-session-registry.js";
+import type { SharedGameHostAuthority } from "../security/shared-game-host-authority.js";
+import { registerDeviceAccountRoutes } from "./device-account-routes.js";
+import { registerGameHostRoutes } from "./game-host-routes.js";
 import {
   AccountSessionExpiringError,
   type SessionTicketService,
@@ -19,9 +22,10 @@ import {
 export interface HttpDependencies {
   readonly catalog: GameCatalogRepository;
   readonly packageArtifacts: PackageArtifactStore;
-  readonly accountIdentity: AccountIdentityPort;
+  readonly accountIdentity: DeviceAccountIdentityPort;
   readonly sessionTickets: SessionTicketService;
   readonly gameSessions: GameSessionRegistry;
+  readonly gameHost?: SharedGameHostAuthority;
   readonly isReady?: () => Promise<boolean>;
 }
 
@@ -145,6 +149,12 @@ function validateSurfaceLeases(
   if (!game.players.sameAccountMultipleSlots && playerSlots.size > 1) {
     throw new HttpError(400, "same_account_multiple_slots_denied", "This package allows one PlayerSlot per account.");
   }
+  const authoredPlan = game.players.defaultLocalSeatPlan;
+  if (authoredPlan !== undefined && surfaces.some(surface => {
+    const requested = [...surface.playerSlots].sort((a, b) => a - b);
+    const expected = [...authoredPlan[surface.role]].sort((a, b) => a - b);
+    return requested.length !== expected.length || requested.some((slot, index) => slot !== expected[index]);
+  })) throw new HttpError(400, "surface_seat_plan_mismatch", "Surface leases must match the release-authored local seat plan.");
 }
 
 interface ByteRange {
@@ -256,6 +266,7 @@ async function deliverPackageArtifact(
 export function registerPlatformRoutes(app: Application, dependencies: HttpDependencies): void {
   app.disable("x-powered-by");
   app.use(express.json({ limit: "32kb", strict: true }));
+  registerDeviceAccountRoutes(app, dependencies.accountIdentity);
 
   app.get("/health", (_request, response) => {
     response.setHeader("Cache-Control", "no-store");
@@ -325,6 +336,10 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
     response.json({ game });
   });
 
+  if (dependencies.gameHost) {
+    registerGameHostRoutes(app, dependencies.gameHost, dependencies.gameSessions);
+  }
+
   app.post("/v1/game-sessions", async (request, response) => {
     const body = parse(GameSessionRequestSchema, request.body);
     const accountToken = parseBearerToken(request.header("authorization"));
@@ -348,6 +363,13 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
       );
     }
     validateSurfaceLeases(body.surfaces, game);
+    if (game.multiplayer.requiresOnline && dependencies.gameHost === undefined) {
+      throw new HttpError(
+        503,
+        "game_authority_unavailable",
+        "The shared game host is unavailable.",
+      );
+    }
     let preparedTicketIssue;
     try {
       preparedTicketIssue = dependencies.sessionTickets.prepareIssue(account);
@@ -376,10 +398,9 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
       );
     }
 
-    const ticketBundle = await dependencies.sessionTickets.issueBundle(
-      preparedTicketIssue,
-      activationResult.activation,
-    );
+    const ticketBundle = game.multiplayer.requiresOnline && dependencies.gameHost
+      ? await dependencies.gameHost.issueBundle(preparedTicketIssue, activationResult.activation)
+      : await dependencies.sessionTickets.issueBundle(preparedTicketIssue, activationResult.activation);
 
     response.setHeader("Cache-Control", "no-store");
     response.status(activationResult.replayed ? 200 : 201).json(ticketBundle);

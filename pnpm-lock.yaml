@@ -8,6 +8,18 @@ importers:
 
   .: {}
 
+  packages/game-host-api:
+    devDependencies:
+      '@colyseus/core':
+        specifier: 0.18.10
+        version: 0.18.10(@colyseus/better-call@1.3.3(zod@4.5.4))(@colyseus/schema@5.0.27(typescript@5.9.3))(@colyseus/ws-transport@0.18.2)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.5.4)
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.10.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+
   packages/game-sdk:
     dependencies:
       '@colyseus/sdk':
@@ -23,6 +35,52 @@ importers:
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+
+  services/game-host:
+    dependencies:
+      '@colyseus/core':
+        specifier: 0.18.10
+        version: 0.18.10(@colyseus/better-call@1.3.3(zod@4.5.4))(@colyseus/schema@5.0.27(typescript@5.9.3))(@colyseus/ws-transport@0.18.2)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.5.4)
+      '@colyseus/schema':
+        specifier: 5.0.27
+        version: 5.0.27(typescript@5.9.3)
+      '@colyseus/ws-transport':
+        specifier: 0.18.2
+        version: 0.18.2(@colyseus/core@0.18.10)(express@5.2.1)
+      '@thorium/game-host-api':
+        specifier: workspace:*
+        version: link:../../packages/game-host-api
+      express:
+        specifier: 5.2.1
+        version: 5.2.1
+      jose:
+        specifier: 6.2.10
+        version: 6.2.10
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@colyseus/sdk':
+        specifier: 0.18.2
+        version: 0.18.2(@colyseus/core@0.18.10)(typescript@5.9.3)(zod@4.5.4)
+      '@types/express':
+        specifier: 5.0.5
+        version: 5.0.5
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      supertest:
+        specifier: 7.2.2
+        version: 7.2.2
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@types/node@24.10.1)(vite@8.2.2(@types/node@24.10.1)(esbuild@0.28.2)(tsx@4.23.13))
 
   services/platform:
     dependencies:

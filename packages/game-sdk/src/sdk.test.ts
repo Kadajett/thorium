@@ -52,6 +52,16 @@ const validManifest = {
   budgets: { maxPackageBytes: 1_048_576, maxFileCount: 8, maxLocalPeerMessageBytes: 4096 },
 } as const;
 
+test("validates release-authored local seat routing and required online authority", () => {
+  const manifest = validateManifest({ ...validManifest, players: { ...validManifest.players, defaultLocalSeatPlan: { main: [], companion: [0] } }, multiplayer: { ...validManifest.multiplayer, requiresOnline: true } });
+  assert.deepEqual(manifest.players.defaultLocalSeatPlan, { main: [], companion: [0] });
+  assert.equal(manifest.multiplayer.requiresOnline, true);
+  for (const plan of [{ main: [0], companion: [0] }, { main: [], companion: [] }, { main: [16], companion: [] }, { main: [0] }, { main: [0], companion: [], other: [] }]) {
+    assert.throws(() => validateManifest({ ...validManifest, players: { ...validManifest.players, defaultLocalSeatPlan: plan } }), ManifestValidationError);
+  }
+  assert.throws(() => validateManifest({ ...validManifest, multiplayer: { ...validManifest.multiplayer, online: false, requiresOnline: true } }), ManifestValidationError);
+});
+
 test("packs byte-for-byte deterministic ZIPs and a stable sorted descriptor", () => {
   const manifest = validateManifest(validManifest);
   const files = [

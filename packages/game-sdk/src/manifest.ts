@@ -37,9 +37,11 @@ export interface WebGameManifest {
     readonly maxSlots: number;
     readonly maxLocalSlots: number;
     readonly sameAccountMultipleSlots: boolean;
+    readonly defaultLocalSeatPlan?: Readonly<Record<SurfaceRole, readonly number[]>>;
   };
   readonly multiplayer: {
     readonly online: boolean;
+    readonly requiresOnline?: boolean;
     readonly roomName: "game_session";
     readonly protocol: "thorium-game-channel-v1";
   };
@@ -224,6 +226,18 @@ export function validateManifest(input: unknown): WebGameManifest {
     if ((players.maxLocalSlots as number) > 1 && players.sameAccountMultipleSlots !== true) {
       issues.push("multiple local slots require players.sameAccountMultipleSlots");
     }
+    if (players.defaultLocalSeatPlan !== undefined) {
+      const plan = record(players.defaultLocalSeatPlan);
+      const seats: number[] = [];
+      if (!plan || Object.keys(plan).sort().join(",") !== "companion,main") issues.push("players.defaultLocalSeatPlan must define exactly main and companion");
+      for (const role of ["main", "companion"] as const) {
+        const slots = plan?.[role];
+        if (!Array.isArray(slots) || slots.length > 16) issues.push(`players.defaultLocalSeatPlan.${role} must be an array of PlayerSlots`);
+        else for (const slot of slots) if (integerInRange(slot, `players.defaultLocalSeatPlan.${role}[]`, 0, 15, issues)) seats.push(slot);
+      }
+      if (new Set(seats).size !== seats.length) issues.push("players.defaultLocalSeatPlan slots must be unique across surfaces");
+      if (seats.length < (players.minSlots as number) || seats.length > (players.maxLocalSlots as number)) issues.push("players.defaultLocalSeatPlan must satisfy local player limits");
+    }
   }
 
   const multiplayer = record(manifest.multiplayer);
@@ -231,6 +245,8 @@ export function validateManifest(input: unknown): WebGameManifest {
     issues.push("multiplayer must be an object");
   } else {
     if (typeof multiplayer.online !== "boolean") issues.push("multiplayer.online must be boolean");
+    if (multiplayer.requiresOnline !== undefined && typeof multiplayer.requiresOnline !== "boolean") issues.push("multiplayer.requiresOnline must be boolean");
+    if (multiplayer.requiresOnline === true && multiplayer.online !== true) issues.push("multiplayer.requiresOnline requires online support");
     if (multiplayer.roomName !== "game_session") issues.push("multiplayer.roomName must be game_session");
     if (multiplayer.protocol !== "thorium-game-channel-v1") {
       issues.push("multiplayer.protocol must be thorium-game-channel-v1");

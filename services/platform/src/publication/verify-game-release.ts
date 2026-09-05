@@ -57,9 +57,14 @@ const ManifestSchema = z.strictObject({
     maxSlots: z.number().int().min(1).max(16),
     maxLocalSlots: z.number().int().min(1).max(16),
     sameAccountMultipleSlots: z.boolean(),
+    defaultLocalSeatPlan: z.strictObject({
+      main: z.array(z.number().int().min(0).max(15)).max(16),
+      companion: z.array(z.number().int().min(0).max(15)).max(16),
+    }).optional(),
   }),
   multiplayer: z.strictObject({
     online: z.boolean(),
+    requiresOnline: z.boolean().optional(),
     roomName: z.literal("game_session"),
     protocol: z.literal("thorium-game-channel-v1"),
   }),
@@ -102,6 +107,16 @@ const ManifestSchema = z.strictObject({
   }
   if (manifest.players.maxLocalSlots > 1 && !manifest.players.sameAccountMultipleSlots) {
     context.addIssue({ code: "custom", path: ["players"], message: "multiple local slots require sameAccountMultipleSlots" });
+  }
+  const seatPlan = manifest.players.defaultLocalSeatPlan;
+  if (seatPlan !== undefined) {
+    const slots = [...seatPlan.main, ...seatPlan.companion];
+    if (new Set(slots).size !== slots.length || slots.length < manifest.players.minSlots || slots.length > manifest.players.maxLocalSlots) {
+      context.addIssue({ code: "custom", path: ["players", "defaultLocalSeatPlan"], message: "seat plan must contain unique slots within local player limits" });
+    }
+  }
+  if (manifest.multiplayer.requiresOnline && !manifest.multiplayer.online) {
+    context.addIssue({ code: "custom", path: ["multiplayer", "requiresOnline"], message: "requiresOnline requires online support" });
   }
   if (new Set(manifest.controls.map((control) => control.id)).size !== manifest.controls.length) {
     context.addIssue({ code: "custom", path: ["controls"], message: "control ids must be unique" });
@@ -362,6 +377,19 @@ export function verifyPublishedGameRelease(input: {
   ).toString();
   const release: GameRelease = {
     ...manifest,
+    players: {
+      minSlots: manifest.players.minSlots,
+      maxSlots: manifest.players.maxSlots,
+      maxLocalSlots: manifest.players.maxLocalSlots,
+      sameAccountMultipleSlots: manifest.players.sameAccountMultipleSlots,
+      ...(manifest.players.defaultLocalSeatPlan === undefined ? {} : { defaultLocalSeatPlan: manifest.players.defaultLocalSeatPlan }),
+    },
+    multiplayer: {
+      online: manifest.multiplayer.online,
+      roomName: manifest.multiplayer.roomName,
+      protocol: manifest.multiplayer.protocol,
+      ...(manifest.multiplayer.requiresOnline === undefined ? {} : { requiresOnline: manifest.multiplayer.requiresOnline }),
+    },
     tags: [],
     publishedAt: input.publishedAt,
     contentDigest: sha256(canonicalJson(descriptor)),

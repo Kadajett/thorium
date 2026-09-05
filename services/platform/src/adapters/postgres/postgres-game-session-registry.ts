@@ -443,6 +443,7 @@ export class PostgresGameSessionRegistry implements GameSessionRegistry {
       if (session === undefined) {
         return finishConflict("SESSION_NOT_FOUND", "The Game Session does not exist.");
       }
+      if (input.release !== undefined && !sameRelease(rowRelease(session), input.release)) return finishConflict("RELEASE_SCOPE_MISMATCH", "The delegated service cannot finish another exact release.");
       if (generationOf(session) !== input.generation) {
         return finishConflict(
           "GENERATION_MISMATCH",
@@ -493,8 +494,9 @@ export class PostgresGameSessionRegistry implements GameSessionRegistry {
               AND generation = $2
               AND status = 'active'
               AND room_instance_id = $3
+              AND ($4::text IS NULL OR (package_id = $4 AND package_version = $5 AND package_digest = $6))
          ) AS active`,
-        [input.gameSessionId, input.generation, input.roomInstanceId],
+        [input.gameSessionId, input.generation, input.roomInstanceId, input.release?.packageId ?? null, input.release?.version ?? null, input.release?.contentDigest ?? null],
       );
       return result.rows[0]?.active === true;
     } finally {
@@ -742,6 +744,7 @@ function admissionConflict(
 function finishConflict(
   code:
     | "SESSION_NOT_FOUND"
+    | "RELEASE_SCOPE_MISMATCH"
     | "GENERATION_MISMATCH"
     | "ROOM_FENCE_MISMATCH"
     | "SESSION_SUPERSEDED",

@@ -55,11 +55,23 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare stable developer signing key
+        env:
+          THORIUM_ANDROID_KEYSTORE_BASE64: ${{ secrets.THORIUM_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$THORIUM_ANDROID_KEYSTORE_BASE64"
+          printf '%s' "$THORIUM_ANDROID_KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/thorium-developer.jks"
+          echo "THORIUM_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/thorium-developer.jks" >> "$GITHUB_ENV"
+
       - name: Run workspace checks
         run: pnpm check
 
       - name: Test, lint, and build Android debug APK
         working-directory: apps/android
+        env:
+          THORIUM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.THORIUM_ANDROID_KEYSTORE_PASSWORD }}
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
       - name: Verify debug signature and create checksum
@@ -107,7 +119,7 @@ jobs:
           cat > "$RUNNER_TEMP/thorium-release-notes.md" <<EOF
           Developer-only Android prerelease.
 
-          This APK is signed with the GitHub Actions runner's Android debug key. It is not production-signed, is not a Play Store release, and is intended only for sideload testing. A later workflow run may use a different debug key, requiring the previous developer build to be uninstalled before installation.
+          This APK is signed with Thorium's stable developer-only debug key. It is not production-signed, is not a Play Store release, and is intended only for sideload testing. Builds from android-v0.1.0-dev.5 onward can be installed over one another; older runner-signed builds must be uninstalled once first.
 
           Thorium is heavily AI-assisted and human-directed and reviewed: the architecture, product decisions, constraints, testing, and acceptance remain under human control. See the repository's [AI-assisted development](https://github.com/$GITHUB_REPOSITORY#ai-assisted-development) disclosure.
           EOF

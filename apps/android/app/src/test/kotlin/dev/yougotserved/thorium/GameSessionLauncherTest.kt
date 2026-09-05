@@ -93,6 +93,22 @@ class GameSessionLauncherTest {
     }
 
     @Test
+    fun acceptsReleaseScopedPhysicalRoomNameFromTheSharedHost() {
+        val physicalRoomName = "g_${"a".repeat(32)}"
+        val launcher = launcherWithAuthority { request ->
+            validSession(request).copy(roomName = physicalRoomName)
+        }
+
+        val launch = (launcher.start(onlineGame()) as GameSessionStartResult.Ready).launch
+
+        assertEquals(physicalRoomName, launch.surfaceCapabilities.getValue(SurfaceRole.MAIN).roomName)
+        assertEquals(
+            physicalRoomName,
+            launch.surfaceCapabilities.getValue(SurfaceRole.COMPANION).roomName,
+        )
+    }
+
+    @Test
     fun requiredOnlineReleaseDoesNotOpenADegradedLocalSession() {
         val missingAccount = GameSessionLauncher(
             authority = GameSessionAuthorityPort { _, _ -> error("authority must not be called") },
