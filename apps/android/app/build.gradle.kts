@@ -25,8 +25,8 @@ android {
         applicationId = "dev.yougotserved.thorium"
         minSdk = 29
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.1.0-dev.4"
+        versionCode = 5
+        versionName = "0.1.0-dev.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "CATALOG_BASE_URL", "\"${catalogBaseUrl.trimEnd('/')}\"")
     }

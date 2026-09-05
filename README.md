@@ -1,6 +1,6 @@
 # Thorium
 
-> **Developer preview:** Thorium is not a consumer release. The Android app is currently version `0.1.0-dev.4` (`versionCode` 4), and the APK produced for hands-on testing is debug-signed. Release signing and validation on physical Thor hardware are not complete.
+> **Developer preview:** Thorium is not a consumer release. The Android app is currently version `0.1.0-dev.5` (`versionCode` 5), and the APK produced for hands-on testing is developer debug-signed. Production signing and validation on physical Thor hardware are not complete.
 
 Thorium is a native Android game platform being built for the dual-screen AYN Thor. The repository contains a Kotlin/Compose catalog, a restricted two-WebView game host, a TypeScript game SDK, immutable package tooling, and a platform service.
 
