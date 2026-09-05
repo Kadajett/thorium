@@ -17,6 +17,30 @@ class GamePackageInstallerTest {
     val temporary = TemporaryFolder()
 
     @Test
+    fun installedControllerMappingMustStillMatchTheVerifiedManifest() {
+        val fixture = TestPackages.withManifest(TestPackages.valid()) { manifest ->
+            val id = manifest.getJSONArray("controls").getJSONObject(0).getString("id")
+            manifest.put("controllerBindings", JSONObject("""{"schema":1,"bindings":[{"kind":"button","input":"east","control":"$id"}]}"""))
+        }
+        val root = temporary.newFolder("controller-integrity").toPath()
+        val archive = root.resolve("package.zip")
+        Files.write(archive, fixture.archive)
+        val installer = VerifiedGamePackageInstaller(root)
+        val release = fixture.release.copy(manifest = GameManifestProjectionParser.parseManifest(
+            JSONObject(String(fixture.entries.single { it.first == "thorium.json" }.second, Charsets.UTF_8)),
+        ))
+        val installed = installer.install(archive, release)
+        val record = installer.installedRecords().single()
+        assertEquals(release.controllerBindings, record.controllerBindings)
+        assertTrue(installer.verifyForLaunch(record.toCatalogGame()))
+        val tampered = record.copy(controllerBindings = ControllerBindings(bindings = listOf(
+            ControllerBinding("button", "north", record.controls.first().id),
+        )))
+        Files.writeString(installed.directory.resolve(".thorium-release.json"), InstalledReleaseRecordCodec.encode(tampered))
+        assertFalse(installer.verifyForLaunch(tampered.toCatalogGame()))
+    }
+
+    @Test
     fun verifiesThenAtomicallyPromotesAndEnumeratesTheInstalledRelease() {
         val fixture = TestPackages.valid()
         val root = temporary.newFolder("store").toPath()

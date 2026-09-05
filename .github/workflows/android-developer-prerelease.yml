@@ -96,6 +96,26 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Package game author SDK
+        working-directory: packages/game-sdk
+        run: |
+          set -euo pipefail
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          SDK_VERSION=$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version')
+          cp "$RUNNER_TEMP/thorium-game-sdk-$SDK_VERSION.tgz" "$GITHUB_WORKSPACE/artifacts/thorium-game-sdk.tgz"
+          cd "$GITHUB_WORKSPACE/artifacts"
+          sha256sum thorium-game-sdk.tgz > thorium-game-sdk.tgz.sha256
+
+      - name: Upload game author SDK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: thorium-sdk-${{ github.run_id }}
+          path: |
+            artifacts/thorium-game-sdk.tgz
+            artifacts/thorium-game-sdk.tgz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
   prerelease:
     name: Publish developer-only prerelease
     if: startsWith(github.ref, 'refs/tags/android-v')
@@ -110,7 +130,13 @@ jobs:
           name: thorium-android-developer-${{ github.run_id }}
           path: release-artifacts
 
-      - name: Create developer-only GitHub prerelease
+      - name: Download game author SDK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: thorium-sdk-${{ github.run_id }}
+          path: release-artifacts
+
+      - name: Publish verified APK and game SDK
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -121,15 +147,23 @@ jobs:
 
           This APK is signed with Thorium's stable developer-only debug key. It is not production-signed, is not a Play Store release, and is intended only for sideload testing. Builds from android-v0.1.0-dev.5 onward can be installed over one another; older runner-signed builds must be uninstalled once first.
 
-          dev.7 separates the main and companion game surfaces into reusable Android tasks on their assigned displays. This targets the physical Thor failure where opening the lower companion stopped the upper game Activity; physical confirmation is still required. The prior lifecycle correction remains in place, so a visible but unfocused surface continues rendering.
+          dev.8 adds game-authored physical button and axis mappings, per-device input state, and routing to the owning player's screen. A single local player is assigned automatically; games with multiple local players prompt for controller assignment. Physical Thor validation remains required.
 
-          The native library now routes D-pad and analog-stick movement through an explicit catalog selection model instead of framework focus traversal. A or D-pad center opens the selected target, X enters Search, Y syncs, and B clears/goes back. Game surfaces consume currently unbound joystick motion before WebView can highlight the whole page. Games remain server-published packages rather than APK-bundled content, and online games connect through Thorium's single shared game host.
+          It also fixes a reproduced Android launcher bug where the first D-pad press after touch mode focused Search instead of navigating the game cards. The selected card now retains real focus in touch mode; the actual Android event replay fails on dev.7 and passes on this build.
+
+          Install this APK before syncing games with controllerBindings profiles. The prior library navigation, separate display tasks, visible-surface rendering, and joystick focus containment remain included. Games remain server-published packages, and online games connect through Thorium's shared game host.
+
+          Serpent's black-screen startup failure was reproduced in Android WebView: its old bundled SDK rejected the shared host's generated room name. The corrected server-published game release is required as well as this APK; updating the APK alone cannot replace an immutable game bundle. Physical Thor confirmation remains outstanding, including the reported upper-screen/input behavior.
+
+          The attached game SDK includes manifest validation, dual-screen preview, and the thorium-game publish command. Publishing uses a scoped token from the public publisher API; it does not require rebuilding the APK. The SDK and APK are built from this release tag, and neither requires a game repository to build.
 
           Thorium is heavily AI-assisted and human-directed and reviewed: the architecture, product decisions, constraints, testing, and acceptance remain under human control. See the repository's [AI-assisted development](https://github.com/$GITHUB_REPOSITORY#ai-assisted-development) disclosure.
           EOF
           gh release create "$GITHUB_REF_NAME" \
             "release-artifacts/thorium-developer-debug.apk#Developer-only Android debug APK" \
             "release-artifacts/thorium-developer-debug.apk.sha256#SHA-256 checksum" \
+            "release-artifacts/thorium-game-sdk.tgz#Game author SDK" \
+            "release-artifacts/thorium-game-sdk.tgz.sha256#SDK SHA-256 checksum" \
             --verify-tag \
             --prerelease \
             --title "Thorium $GITHUB_REF_NAME developer prerelease" \

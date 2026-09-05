@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -470,6 +471,9 @@ private fun GameCoverCard(
             )
             .focusRequester(focusRequester)
             .onFocusChanged { if (it.isFocused) onFocused() }
+            // Keep the selected card focused across touch mode. Otherwise ViewRoot consumes
+            // the first D-pad key to establish focus before Activity.dispatchKeyEvent sees it.
+            .focusProperties { canFocus = true }
             .semantics(mergeDescendants = true) {
                 this.selected = selected
                 stateDescription = actionLabel

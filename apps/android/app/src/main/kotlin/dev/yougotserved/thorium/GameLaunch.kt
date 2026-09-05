@@ -94,8 +94,10 @@ data class GameLaunch(
         localPlayerSlots
     },
     val surfaceCapabilities: Map<SurfaceRole, ColyseusSessionCapability> = emptyMap(),
+    val controllerBindings: ControllerBindings? = null,
 ) {
     init {
+        controllerBindings?.validate(controls)
         require(GameLaunchPolicy.isValidPackageId(packageId)) { "Invalid package ID" }
         require(GameLaunchPolicy.isValidVersion(version)) { "Invalid game version" }
         require(GameLaunchPolicy.isValidSessionId(sessionId)) { "Invalid session ID" }
@@ -206,6 +208,7 @@ data class GameLaunch(
         .putExtra(CONTROL_IDS, controls.map { it.id }.toTypedArray())
         .putExtra(CONTROL_LABELS, controls.map { it.label }.toTypedArray())
         .putExtra(CONTROL_KINDS, controls.map { it.kind }.toTypedArray())
+        .putExtra(CONTROLLER_BINDINGS, controllerBindings?.toJson()?.toString())
         .putExtra(MAX_LOCAL_SLOTS, maxLocalSlots)
         .putExtra(LOCAL_PLAYER_SLOTS, localPlayerSlots.sorted().toIntArray())
         .putExtra(MAX_LOCAL_PEER_MESSAGE_BYTES, maxLocalPeerMessageBytes)
@@ -255,6 +258,7 @@ data class GameLaunch(
         const val CONTROL_IDS = "control_ids"
         const val CONTROL_LABELS = "control_labels"
         const val CONTROL_KINDS = "control_kinds"
+        const val CONTROLLER_BINDINGS = "controller_bindings"
         const val MAX_LOCAL_SLOTS = "max_local_slots"
         const val LOCAL_PLAYER_SLOTS = "local_player_slots"
         const val MAX_LOCAL_PEER_MESSAGE_BYTES = "max_local_peer_message_bytes"
@@ -293,6 +297,7 @@ data class GameLaunch(
             companionLogicalHeight = game.companionLogicalHeight,
             companionMaximumDevicePixelRatio = game.companionMaximumDevicePixelRatio,
             controls = game.controls,
+            controllerBindings = game.controllerBindings,
             southButtonBinding = game.southButtonBinding,
             maxLocalSlots = game.maxLocalSlots,
             localPlayerSlots = localPlayerSlots,
@@ -311,6 +316,9 @@ data class GameLaunch(
             val controlLabels = intent.getStringArrayExtra(CONTROL_LABELS) ?: return null
             val controlKinds = intent.getStringArrayExtra(CONTROL_KINDS) ?: return null
             if (controlIds.size != controlLabels.size || controlIds.size != controlKinds.size) return null
+            val controls = controlIds.indices.map { index ->
+                ReleaseControl(controlIds[index], controlLabels[index], controlKinds[index])
+            }
             GameLaunch(
                 packageId = intent.getStringExtra(PACKAGE_ID) ?: return null,
                 version = intent.getStringExtra(VERSION) ?: return null,
@@ -330,8 +338,9 @@ data class GameLaunch(
                     COMPANION_MAXIMUM_DEVICE_PIXEL_RATIO,
                     Double.NaN,
                 ),
-                controls = controlIds.indices.map { index ->
-                    ReleaseControl(controlIds[index], controlLabels[index], controlKinds[index])
+                controls = controls,
+                controllerBindings = intent.getStringExtra(CONTROLLER_BINDINGS)?.let {
+                    ControllerBindings.parse(JSONObject(it), controls)
                 },
                 southButtonBinding = southControl?.let { control ->
                     SouthButtonBinding(

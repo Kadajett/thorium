@@ -194,6 +194,7 @@ object GameBootstrapMessage {
                 JSONArray(launch.controlledPlayerSlots(role).sorted()),
             )
             .put("controls", controls)
+            .put("controllerInput", if (launch.controllerBindings == null) "browser" else "native")
             .put(
                 "render",
                 JSONObject()

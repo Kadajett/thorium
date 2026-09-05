@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="controller_assignment_title">Assign controller</string>
+    <string name="controller_assignment_help">Choose a player · D-pad / stick, A to select, B to cancel</string>
+    <string name="controller_assignment_player">Player %1$d</string>
+    <string name="controller_assignment_cancel">Cancel</string>
+</resources>

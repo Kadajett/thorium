@@ -7,6 +7,36 @@ import org.junit.Test
 
 class LocalSessionCoordinatorTest {
     @Test
+    fun nativeProfilesRouteTwoAssignedDevicesToTheirActualOwnersAcrossFocusAndBackground() {
+        val launch = launch("authored-controllers").copy(
+            southButtonBinding = null,
+            controllerBindings = ControllerBindings(bindings = listOf(ControllerBinding("button", "east", "tap"))),
+        )
+        val main = RecordingEndpoint()
+        val companion = RecordingEndpoint()
+        LocalSessionCoordinator.register(launch, SurfaceRole.MAIN, main)
+        LocalSessionCoordinator.register(launch, SurfaceRole.COMPANION, companion)
+        try {
+            LocalSessionCoordinator.setSurfaceVisible(launch, SurfaceRole.MAIN, true)
+            LocalSessionCoordinator.setSurfaceVisible(launch, SurfaceRole.COMPANION, true)
+            LocalSessionCoordinator.assignController(launch, 11, 0)
+            LocalSessionCoordinator.assignController(launch, 22, 1)
+            assertTrue(LocalSessionCoordinator.handleController(launch, SurfaceRole.COMPANION, ControllerDeviceInput(11, buttons = mapOf("east" to true))))
+            assertTrue(LocalSessionCoordinator.handleController(launch, SurfaceRole.MAIN, ControllerDeviceInput(22, buttons = mapOf("east" to true))))
+            assertEquals(0, JSONObject(main.messages.single()).getJSONObject("event").getInt("player"))
+            assertEquals(1, JSONObject(companion.messages.single()).getJSONObject("event").getInt("player"))
+            LocalSessionCoordinator.setSurfaceVisible(launch, SurfaceRole.MAIN, false)
+            assertEquals(1, companion.messages.size)
+            LocalSessionCoordinator.setSurfaceVisible(launch, SurfaceRole.COMPANION, false)
+            assertEquals("released", JSONObject(main.messages.last()).getJSONObject("event").getString("phase"))
+            assertEquals("released", JSONObject(companion.messages.last()).getJSONObject("event").getString("phase"))
+        } finally {
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.MAIN, main)
+            LocalSessionCoordinator.unregister(launch, SurfaceRole.COMPANION, companion)
+        }
+    }
+
+    @Test
     fun routesControllerInputToMainExactlyOnceAcrossFocusChanges() {
         val launch = launch("controller-routing")
         val main = RecordingEndpoint()

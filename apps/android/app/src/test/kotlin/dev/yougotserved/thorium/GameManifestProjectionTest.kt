@@ -8,6 +8,47 @@ import org.junit.Test
 
 class GameManifestProjectionTest {
     @Test
+    fun rejectsMalformedOrAmbiguousControllerProfiles() {
+        val controls = listOf(ReleaseControl("fire", "Fire", "button"), ReleaseControl("aim", "Aim", "axis"))
+        val invalid = listOf(
+            """{"schema":2,"bindings":[{"kind":"button","input":"south","control":"fire"}]}""",
+            """{"schema":1,"bindings":[]}""",
+            """{"schema":1,"extra":1,"bindings":[{"kind":"button","input":"south","control":"fire"}]}""",
+            """{"schema":1,"bindings":[{"kind":"button","input":"invented","control":"fire"}]}""",
+            """{"schema":1,"bindings":[{"kind":"button","input":"south","control":"unknown"}]}""",
+            """{"schema":1,"bindings":[{"kind":"button","input":"south","control":"aim"}]}""",
+            """{"schema":1,"bindings":[{"kind":"axis","input":"left-x","control":"fire"}]}""",
+            """{"schema":1,"bindings":[{"kind":"axis-button","input":"left-x","control":"fire","direction":0}]}""",
+            """{"schema":1,"bindings":[{"kind":"button","input":"south","control":"fire","direction":1}]}""",
+            """{"schema":1,"bindings":[{"kind":"button","input":"south","control":"fire"},{"kind":"button","input":"south","control":"fire"}]}""",
+            """{"schema":1,"bindings":[{"kind":"axis","input":"left-x","control":"aim"},{"kind":"axis-button","input":"left-x","control":"fire","direction":1}]}""",
+        )
+        invalid.forEach { raw ->
+            assertThrows(raw, CatalogParseException::class.java) { ControllerBindings.parse(JSONObject(raw), controls) }
+        }
+        assertThrows(CatalogParseException::class.java) { ControllerBindings.parse(JSONObject.NULL, controls) }
+    }
+
+    @Test
+    fun acceptsReleaseAuthoredControllerBindings() {
+        val manifest = fixtureManifest()
+        val control = manifest.getJSONArray("controls").getJSONObject(0).getString("id")
+        manifest.put("controllerBindings", JSONObject("""{"schema":1,"bindings":[{"kind":"button","input":"east","control":"$control"}]}"""))
+        GameManifestProjectionParser.parseManifest(manifest)
+    }
+
+    @Test
+    fun preservesAuthoredBindingsThroughInstallation() {
+        val fixture = TestPackages.valid()
+        val manifest = fixtureManifest()
+        val control = manifest.getJSONArray("controls").getJSONObject(0).getString("id")
+        manifest.put("controllerBindings", JSONObject("""{"schema":1,"bindings":[{"kind":"button","input":"east","control":"$control"}]}"""))
+        val release = fixture.release.copy(manifest = GameManifestProjectionParser.parseManifest(manifest))
+        val encoded = InstalledReleaseRecordCodec.encode(InstalledReleaseRecordCodec.fromRelease(release))
+        assertTrue(JSONObject(encoded).has("controllerBindings"))
+    }
+
+    @Test
     fun validatesSchemaAnnotationWithoutIncludingItInPolicyIdentity() {
         val manifest = fixtureManifest()
         val expected = GameManifestProjectionParser.parseManifest(manifest)

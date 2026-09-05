@@ -59,6 +59,7 @@ data class GameManifestProjection(
     val controls: List<ReleaseControl>,
     val capabilities: List<String>,
     val budgets: ManifestBudgets,
+    val controllerBindings: ControllerBindings? = null,
 )
 
 /** One strict schema path for both remote catalog projections and archived manifests. */
@@ -222,6 +223,9 @@ object GameManifestProjectionParser {
 
         return GameManifestProjection(
             schema = schema,
+            controllerBindings = if (value.has("controllerBindings")) {
+                ControllerBindings.parse(value.opt("controllerBindings"), controls)
+            } else null,
             packageId = packageId,
             version = version,
             displayName = value.requiredString("displayName", 80),
@@ -361,6 +365,7 @@ object GameManifestProjectionParser {
         "players",
         "multiplayer",
         "controls",
+        "controllerBindings",
         "capabilities",
         "budgets",
     )
@@ -391,5 +396,5 @@ object GameManifestProjectionParser {
     )
     private val MANIFEST_REQUIRED_NESTED_KEYS = RUNTIME_KEYS + ENTRYPOINTS_KEYS + ENTRYPOINT_KEYS +
         DISPLAYS_KEYS + SCREEN_KEYS + PLAYERS_KEYS + MULTIPLAYER_KEYS + CONTROL_KEYS + BUDGET_KEYS +
-        (MANIFEST_KEYS - "\$schema") - setOf("defaultLocalSeatPlan", "requiresOnline")
+        (MANIFEST_KEYS - "\$schema") - setOf("defaultLocalSeatPlan", "requiresOnline", "controllerBindings")
 }

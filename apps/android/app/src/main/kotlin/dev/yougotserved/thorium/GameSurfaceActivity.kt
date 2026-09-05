@@ -2,6 +2,7 @@ package dev.yougotserved.thorium
 
 import android.app.Activity
 import android.content.Intent
+import android.hardware.input.InputManager
 import android.os.Bundle
 import android.os.Build
 import android.util.Log
@@ -11,7 +12,7 @@ import android.view.MotionEvent
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 
-abstract class GameSurfaceActivity : Activity() {
+abstract class GameSurfaceActivity : Activity(), InputManager.InputDeviceListener {
     protected abstract val surfaceRole: SurfaceRole
     protected var gameLaunch: GameLaunch? = null
         private set
@@ -21,17 +22,22 @@ abstract class GameSurfaceActivity : Activity() {
         pauseSurface = { surface?.onPause() },
     )
     private var lastMotionTraceAtMillis = 0L
+    private var assignmentDialog: ControllerAssignmentDialog? = null
+    private var started = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         trace("create")
         install(intent)
+        getSystemService(InputManager::class.java).registerInputDeviceListener(this, null)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         trace("new-intent")
         setIntent(intent)
+        assignmentDialog?.dismiss()
+        gameLaunch?.let { LocalSessionCoordinator.setSurfaceVisible(it, surfaceRole, false) }
         surface?.destroy()
         surface = null
         gameLaunch = null
@@ -41,6 +47,8 @@ abstract class GameSurfaceActivity : Activity() {
     override fun onStart() {
         super.onStart()
         trace("start")
+        started = true
+        gameLaunch?.let { LocalSessionCoordinator.setSurfaceVisible(it, surfaceRole, true) }
         surfaceLifecycle.onStart()
     }
 
@@ -58,6 +66,9 @@ abstract class GameSurfaceActivity : Activity() {
 
     override fun onStop() {
         trace("stop")
+        started = false
+        assignmentDialog?.dismiss()
+        gameLaunch?.let { LocalSessionCoordinator.setSurfaceVisible(it, surfaceRole, false) }
         surfaceLifecycle.onStop()
         super.onStop()
     }
@@ -74,6 +85,13 @@ abstract class GameSurfaceActivity : Activity() {
         }
         val launch = gameLaunch
         if (launch != null) {
+            if (launch.controllerBindings != null) {
+                val native = AndroidGameControllerInput.key(event.deviceId, event.keyCode, event.action)
+                if (native != null) {
+                    handleNativeInput(launch, native)
+                    return true
+                }
+            }
             val input = AndroidControllerInput.translate(
                 keyCode = event.keyCode,
                 action = event.action,
@@ -98,13 +116,44 @@ abstract class GameSurfaceActivity : Activity() {
             AndroidHostTrace.motion(this, surfaceRole.name.lowercase(), event)
             lastMotionTraceAtMillis = event.eventTime
         }
-        // No release-authored native axis bindings exist yet. Do not let unbound
-        // joystick/hat events trigger WebView's page-wide spatial-focus fallback.
+        gameLaunch?.takeIf { it.controllerBindings != null }?.let { launch ->
+            AndroidGameControllerInput.motion(event)?.let { handleNativeInput(launch, it) }
+        }
+        // Even unbound controller motion must not reach WebView's spatial-focus fallback.
         return true
+    }
+
+    private fun handleNativeInput(launch: GameLaunch, input: ControllerDeviceInput) {
+        if (LocalSessionCoordinator.needsControllerAssignment(launch, input.deviceId)) {
+            val intentional = input.buttons.values.any { it } || input.axes.values.any { it.isFinite() && kotlin.math.abs(it) >= 0.6 }
+            if (intentional && assignmentDialog == null) {
+                // Dialog focus can divert key-up events from either Activity. Release state first.
+                LocalSessionCoordinator.releaseControllerInputs(launch)
+                assignmentDialog = ControllerAssignmentDialog(this, input.deviceId, launch.localPlayerSlots.sorted()) { slot ->
+                    LocalSessionCoordinator.assignController(launch, input.deviceId, slot)
+                }.also { dialog ->
+                    dialog.setOnDismissListener { assignmentDialog = null }
+                    dialog.show()
+                }
+            }
+            return
+        }
+        LocalSessionCoordinator.handleController(launch, surfaceRole, input)
+    }
+
+    override fun onInputDeviceAdded(deviceId: Int) = Unit
+    override fun onInputDeviceChanged(deviceId: Int) {
+        gameLaunch?.let { LocalSessionCoordinator.disconnectController(it, deviceId) }
+    }
+    override fun onInputDeviceRemoved(deviceId: Int) {
+        assignmentDialog?.dismiss()
+        gameLaunch?.let { LocalSessionCoordinator.disconnectController(it, deviceId) }
     }
 
     override fun onDestroy() {
         trace("destroy finishing=$isFinishing")
+        assignmentDialog?.dismiss()
+        getSystemService(InputManager::class.java).unregisterInputDeviceListener(this)
         gameLaunch?.let {
             LocalSessionCoordinator.onSurfaceDestroyed(it, surfaceRole, isFinishing)
         }
@@ -133,6 +182,7 @@ abstract class GameSurfaceActivity : Activity() {
             return
         }
         gameLaunch = launch
+        if (started) LocalSessionCoordinator.setSurfaceVisible(launch, surfaceRole, true)
         surface = created
         setContentView(created.view)
         surfaceLifecycle.onSurfaceReplaced()

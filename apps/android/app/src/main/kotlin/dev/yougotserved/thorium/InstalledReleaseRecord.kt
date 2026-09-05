@@ -45,8 +45,10 @@ data class InstalledReleaseRecord(
     val integrity: InstalledReleaseIntegrity?,
     val defaultLocalSeatPlan: Map<SurfaceRole, Set<Int>>? = null,
     val multiplayerRequiresOnline: Boolean = false,
+    val controllerBindings: ControllerBindings? = null,
 ) {
     init {
+        controllerBindings?.validate(controls)
         require(mainEntrypoint in runtimeFiles && companionEntrypoint in runtimeFiles)
         require(runtimeFiles.isNotEmpty() && runtimeFiles.all(GameLaunchPolicy::isSafePackagePath))
         require(minPlayers in 1..maxPlayers && maxPlayers <= 16)
@@ -84,6 +86,7 @@ data class InstalledReleaseRecord(
         companionLogicalHeight = companionScreen.logicalHeight,
         companionMaximumDevicePixelRatio = companionScreen.maximumDevicePixelRatio,
         controls = controls,
+        controllerBindings = controllerBindings,
         southButtonBinding = southButtonBinding,
         minPlayers = minPlayers,
         maxPlayers = maxPlayers,
@@ -118,6 +121,7 @@ object InstalledReleaseRecordCodec {
         multiplayerOnline = release.multiplayerOnline,
         maxLocalPeerMessageBytes = release.maxLocalPeerMessageBytes,
         controls = release.controls,
+        controllerBindings = release.controllerBindings,
         southButtonBinding = CatalogBindings.southButton(release),
         capabilities = release.capabilities.toSet(),
         integrity = InstalledReleaseIntegrity(
@@ -169,6 +173,7 @@ object InstalledReleaseRecordCodec {
                     .put("companion", JSONArray(plan[SurfaceRole.COMPANION].orEmpty().sorted())),
             )
         }
+        record.controllerBindings?.let { root.put("controllerBindings", it.toJson()) }
         record.integrity?.let { integrity ->
             val files = JSONArray()
             integrity.files.sortedBy { it.path }.forEach { file ->
@@ -337,6 +342,9 @@ object InstalledReleaseRecordCodec {
                 integer(root, "maxLocalPeerMessageBytes", 1, 64 * 1024)
             },
             controls = controls,
+            controllerBindings = if (root.has("controllerBindings")) {
+                ControllerBindings.parse(root.opt("controllerBindings"), controls)
+            } else null,
             southButtonBinding = binding,
             capabilities = capabilities,
             integrity = integrity,

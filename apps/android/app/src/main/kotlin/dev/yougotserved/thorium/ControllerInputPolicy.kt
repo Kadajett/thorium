@@ -27,7 +27,7 @@ data class SemanticControlInput(
     val controlId: String,
     val playerSlot: Int,
     val phase: String,
-    val value: Int,
+    val value: Double,
     val sequence: Long,
 )
 
@@ -54,7 +54,7 @@ class ControllerInputPolicy(private val southButton: SouthButtonBinding?) {
                             controlId = binding.controlId,
                             playerSlot = binding.playerSlot,
                             phase = "pressed",
-                            value = 1,
+                            value = 1.0,
                             sequence = nextSequence++,
                         ),
                     )
@@ -71,7 +71,7 @@ class ControllerInputPolicy(private val southButton: SouthButtonBinding?) {
                             controlId = binding.controlId,
                             playerSlot = binding.playerSlot,
                             phase = "released",
-                            value = 0,
+                            value = 0.0,
                             sequence = nextSequence++,
                         ),
                     )

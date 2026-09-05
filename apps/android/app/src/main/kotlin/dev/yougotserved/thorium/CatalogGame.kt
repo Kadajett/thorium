@@ -29,6 +29,7 @@ data class CatalogGame(
     val capabilities: Set<String>,
     val defaultLocalSeatPlan: Map<SurfaceRole, Set<Int>>? = null,
     val multiplayerRequiresOnline: Boolean = false,
+    val controllerBindings: ControllerBindings? = null,
 )
 
 enum class CatalogActionState {
@@ -46,6 +47,7 @@ data class CatalogItem(
 
 object CatalogBindings {
     fun southButton(release: GameRelease): SouthButtonBinding? = release.controls
+        .takeIf { release.controllerBindings == null }.orEmpty()
         .firstOrNull { control -> control.kind == "button" }
         ?.let { control ->
             val role = release.defaultLocalSeatPlan?.entries
@@ -73,6 +75,7 @@ fun GameRelease.toCatalogGame(): CatalogGame = CatalogGame(
     companionLogicalHeight = companionScreen.logicalHeight,
     companionMaximumDevicePixelRatio = companionScreen.maximumDevicePixelRatio,
     controls = controls,
+    controllerBindings = controllerBindings,
     southButtonBinding = CatalogBindings.southButton(this),
     minPlayers = minPlayers,
     maxPlayers = maxPlayers,

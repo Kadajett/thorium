@@ -318,6 +318,8 @@ class VerifiedGamePackageInstaller(private val storageRoot: Path) {
             !isTrustedRegularFile(manifest) || Files.size(manifest) > MAX_MANIFEST_BYTES ||
             sha256(manifest) != integrity.manifestSha256
         ) return false
+        val verifiedManifest = GameManifestProjectionParser.parseManifest(JSONObject(readUtf8(manifest)))
+        if (verifiedManifest.controllerBindings != record.controllerBindings) return false
         return integrity.files.all { expected ->
             val path = target.resolve(expected.path).normalize()
             path.startsWith(target) && isTrustedRegularFile(path) &&

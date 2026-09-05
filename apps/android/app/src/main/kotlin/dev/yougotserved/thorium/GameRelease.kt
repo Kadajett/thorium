@@ -61,6 +61,7 @@ data class GameRelease(
     val multiplayerOnline: Boolean get() = manifest.multiplayer.online
     val multiplayerRequiresOnline: Boolean get() = manifest.multiplayer.requiresOnline
     val controls: List<ReleaseControl> get() = manifest.controls
+    val controllerBindings: ControllerBindings? get() = manifest.controllerBindings
     val capabilities: List<String> get() = manifest.capabilities
     val maxPackageBytes: Long get() = manifest.budgets.maxPackageBytes
     val maxFileCount: Int get() = manifest.budgets.maxFileCount
