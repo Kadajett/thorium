@@ -23,7 +23,9 @@ const BrowserOrigins = z.string().transform((raw, context) => {
   return [...origins];
 });
 
-const Environment = z.strictObject({
+// `process.env` always includes runtime-owned entries such as PATH and HOME.
+// Validate and strip unknown entries while keeping every host-owned field strict.
+const Environment = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST_ADDRESS: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(2_568),
