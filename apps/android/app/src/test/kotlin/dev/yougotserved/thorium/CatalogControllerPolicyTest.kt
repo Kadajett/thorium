@@ -8,112 +8,140 @@ import org.junit.Test
 
 class CatalogControllerPolicyTest {
     @Test
-    fun mapsGamepadButtonsToLauncherCommands() {
-        assertEquals(
-            CatalogControllerCommand.MOVE_UP,
-            command(CatalogControllerKey.DPAD_UP),
-        )
-        assertEquals(
-            CatalogControllerCommand.MOVE_DOWN,
-            command(CatalogControllerKey.DPAD_DOWN),
-        )
-        assertEquals(
-            CatalogControllerCommand.MOVE_LEFT,
-            command(CatalogControllerKey.DPAD_LEFT),
-        )
-        assertEquals(
-            CatalogControllerCommand.MOVE_RIGHT,
-            command(CatalogControllerKey.DPAD_RIGHT),
-        )
-        assertEquals(
-            CatalogControllerCommand.ACTIVATE,
-            command(CatalogControllerKey.BUTTON_A),
-        )
-        assertEquals(
-            CatalogControllerCommand.SEARCH,
-            command(CatalogControllerKey.BUTTON_X),
-        )
-        assertEquals(
-            CatalogControllerCommand.REFRESH,
-            command(CatalogControllerKey.BUTTON_Y),
-        )
-        assertEquals(
-            CatalogControllerCommand.BACK_OR_CLEAR,
-            command(CatalogControllerKey.BUTTON_B),
-        )
+    fun mapsAndroidDpadAndFaceButtonKeycodesWithoutComposeFocus() {
+        assertEquals(CatalogControllerCommand.MOVE_UP, keyDown(AndroidCatalogKeyCode.DPAD_UP))
+        assertEquals(CatalogControllerCommand.MOVE_DOWN, keyDown(AndroidCatalogKeyCode.DPAD_DOWN))
+        assertEquals(CatalogControllerCommand.MOVE_LEFT, keyDown(AndroidCatalogKeyCode.DPAD_LEFT))
+        assertEquals(CatalogControllerCommand.MOVE_RIGHT, keyDown(AndroidCatalogKeyCode.DPAD_RIGHT))
+        assertEquals(CatalogControllerCommand.ACTIVATE, keyDown(AndroidCatalogKeyCode.BUTTON_A))
+        assertEquals(CatalogControllerCommand.SEARCH, keyDown(AndroidCatalogKeyCode.BUTTON_X))
+        assertEquals(CatalogControllerCommand.REFRESH, keyDown(AndroidCatalogKeyCode.BUTTON_Y))
+        assertEquals(CatalogControllerCommand.BACK_OR_CLEAR, keyDown(AndroidCatalogKeyCode.BUTTON_B))
+
+        assertTrue(CatalogAndroidKeyPolicy.recognizes(AndroidCatalogKeyCode.DPAD_UP))
+        assertTrue(CatalogAndroidKeyPolicy.recognizes(AndroidCatalogKeyCode.BUTTON_A))
+        assertFalse(CatalogAndroidKeyPolicy.recognizes(24))
     }
 
     @Test
-    fun ignoresButtonReleaseAndRepeatedOneShotActions() {
+    fun consumesReleasesAndDebouncesAWhileAllowingHeldDpadMovement() {
         assertNull(
-            CatalogControllerPolicy.command(
-                CatalogControllerInput(
-                    key = CatalogControllerKey.BUTTON_A,
-                    phase = ControllerKeyPhase.UP,
-                    repeatCount = 0,
-                ),
+            CatalogAndroidKeyPolicy.command(
+                AndroidCatalogKeyCode.BUTTON_A,
+                AndroidCatalogKeyAction.UP,
+                repeatCount = 0,
             ),
         )
         assertNull(
-            CatalogControllerPolicy.command(
-                CatalogControllerInput(
-                    key = CatalogControllerKey.BUTTON_Y,
-                    phase = ControllerKeyPhase.DOWN,
-                    repeatCount = 1,
-                ),
+            CatalogAndroidKeyPolicy.command(
+                AndroidCatalogKeyCode.BUTTON_A,
+                AndroidCatalogKeyAction.DOWN,
+                repeatCount = 1,
             ),
         )
         assertEquals(
             CatalogControllerCommand.MOVE_DOWN,
-            CatalogControllerPolicy.command(
-                CatalogControllerInput(
-                    key = CatalogControllerKey.DPAD_DOWN,
-                    phase = ControllerKeyPhase.DOWN,
-                    repeatCount = 3,
-                ),
+            CatalogAndroidKeyPolicy.command(
+                AndroidCatalogKeyCode.DPAD_DOWN,
+                AndroidCatalogKeyAction.DOWN,
+                repeatCount = 3,
             ),
         )
     }
 
     @Test
-    fun movesWithinRowsAndColumnsWithoutWrapping() {
-        assertEquals(5, CatalogControllerPolicy.moveSelection(2, 8, 3, CatalogControllerCommand.MOVE_DOWN))
-        assertEquals(2, CatalogControllerPolicy.moveSelection(5, 8, 3, CatalogControllerCommand.MOVE_UP))
-        assertEquals(4, CatalogControllerPolicy.moveSelection(3, 8, 3, CatalogControllerCommand.MOVE_RIGHT))
-        assertEquals(3, CatalogControllerPolicy.moveSelection(3, 8, 3, CatalogControllerCommand.MOVE_LEFT))
-        assertEquals(2, CatalogControllerPolicy.moveSelection(2, 8, 3, CatalogControllerCommand.MOVE_RIGHT))
-        assertEquals(7, CatalogControllerPolicy.moveSelection(7, 8, 3, CatalogControllerCommand.MOVE_DOWN))
+    fun movesCardToSearchToRefreshAndBackToTheSameCard() {
+        var focus = CatalogFocus(CatalogFocusTarget.CARD, cardIndex = 1)
+
+        focus = CatalogFocusPolicy.move(focus, CatalogControllerCommand.MOVE_UP, 8, 3)
+        assertEquals(CatalogFocusTarget.SEARCH, focus.target)
+
+        focus = CatalogFocusPolicy.move(focus, CatalogControllerCommand.MOVE_RIGHT, 8, 3)
+        assertEquals(CatalogFocusTarget.REFRESH, focus.target)
+
+        focus = CatalogFocusPolicy.move(focus, CatalogControllerCommand.MOVE_DOWN, 8, 3)
+        assertEquals(CatalogFocus(CatalogFocusTarget.CARD, cardIndex = 1), focus)
+    }
+
+    @Test
+    fun gridAndUtilityBoundariesNeverWrapOrLoseTheRememberedCard() {
+        assertEquals(
+            CatalogFocus(CatalogFocusTarget.CARD, 0),
+            CatalogFocusPolicy.move(
+                CatalogFocus(CatalogFocusTarget.CARD, 0),
+                CatalogControllerCommand.MOVE_LEFT,
+                itemCount = 8,
+                columnCount = 3,
+            ),
+        )
+        assertEquals(
+            CatalogFocus(CatalogFocusTarget.CARD, 2),
+            CatalogFocusPolicy.move(
+                CatalogFocus(CatalogFocusTarget.CARD, 2),
+                CatalogControllerCommand.MOVE_RIGHT,
+                itemCount = 8,
+                columnCount = 3,
+            ),
+        )
+        assertEquals(
+            CatalogFocus(CatalogFocusTarget.CARD, 7),
+            CatalogFocusPolicy.move(
+                CatalogFocus(CatalogFocusTarget.CARD, 7),
+                CatalogControllerCommand.MOVE_DOWN,
+                itemCount = 8,
+                columnCount = 3,
+            ),
+        )
+        assertEquals(
+            CatalogFocus(CatalogFocusTarget.SEARCH, 7),
+            CatalogFocusPolicy.move(
+                CatalogFocus(CatalogFocusTarget.SEARCH, 7),
+                CatalogControllerCommand.MOVE_LEFT,
+                itemCount = 8,
+                columnCount = 3,
+            ),
+        )
+    }
+
+    @Test
+    fun activationFollowsTheFocusedTarget() {
+        assertEquals(
+            CatalogActivation.ACTIVATE_CARD,
+            CatalogFocusPolicy.activation(CatalogFocus(CatalogFocusTarget.CARD, 4), itemCount = 8),
+        )
+        assertEquals(
+            CatalogActivation.FOCUS_SEARCH,
+            CatalogFocusPolicy.activation(CatalogFocus(CatalogFocusTarget.SEARCH, 4), itemCount = 8),
+        )
+        assertEquals(
+            CatalogActivation.REFRESH,
+            CatalogFocusPolicy.activation(CatalogFocus(CatalogFocusTarget.REFRESH, 4), itemCount = 8),
+        )
+        assertNull(
+            CatalogFocusPolicy.activation(CatalogFocus(CatalogFocusTarget.CARD, 0), itemCount = 0),
+        )
     }
 
     @Test
     fun backClearsSearchBeforeLeavingTheLauncher() {
         assertEquals(
             CatalogBackDecision.CLEAR_SEARCH,
-            CatalogControllerPolicy.backDecision(query = "race", searchFocused = false),
+            CatalogFocusPolicy.backDecision(query = "race", searchInputFocused = false),
         )
         assertEquals(
             CatalogBackDecision.CLEAR_SEARCH,
-            CatalogControllerPolicy.backDecision(query = "", searchFocused = true),
+            CatalogFocusPolicy.backDecision(query = "", searchInputFocused = true),
         )
         assertEquals(
             CatalogBackDecision.NAVIGATE_BACK,
-            CatalogControllerPolicy.backDecision(query = "", searchFocused = false),
+            CatalogFocusPolicy.backDecision(query = "", searchInputFocused = false),
         )
     }
 
-    @Test
-    fun selectedCardOwnsVisibleFocusUntilSearchTakesFocus() {
-        assertTrue(CatalogControllerPolicy.isCardFocused(selected = 2, index = 2, searchFocused = false))
-        assertFalse(CatalogControllerPolicy.isCardFocused(selected = 2, index = 1, searchFocused = false))
-        assertFalse(CatalogControllerPolicy.isCardFocused(selected = 2, index = 2, searchFocused = true))
-    }
-
-    private fun command(key: CatalogControllerKey): CatalogControllerCommand? =
-        CatalogControllerPolicy.command(
-            CatalogControllerInput(
-                key = key,
-                phase = ControllerKeyPhase.DOWN,
-                repeatCount = 0,
-            ),
+    private fun keyDown(keyCode: Int): CatalogControllerCommand? =
+        CatalogAndroidKeyPolicy.command(
+            keyCode = keyCode,
+            action = AndroidCatalogKeyAction.DOWN,
+            repeatCount = 0,
         )
 }

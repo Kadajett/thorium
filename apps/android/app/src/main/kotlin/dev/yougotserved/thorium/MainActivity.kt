@@ -1,7 +1,9 @@
 package dev.yougotserved.thorium
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -12,6 +14,7 @@ import java.nio.file.Path
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
     private val worker = Executors.newFixedThreadPool(2)
@@ -21,6 +24,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var catalogClient: RemoteCatalogClient
     private lateinit var packageDownloader: PackageDownloader
     private lateinit var gameSessionLauncher: GameSessionLauncher
+    private val catalogControllerCommands = MutableSharedFlow<CatalogControllerCommand>(
+        extraBufferCapacity = 16,
+    )
     private var catalogItems by mutableStateOf(emptyList<CatalogItem>())
     private var catalogLoading by mutableStateOf(true)
     private var catalogError by mutableStateOf<String?>(null)
@@ -40,10 +46,22 @@ class MainActivity : ComponentActivity() {
                     onSearch = ::loadCatalog,
                     onAction = ::handleAction,
                     onBack = onBackPressedDispatcher::onBackPressed,
+                    controllerCommands = catalogControllerCommands,
                 )
             }
         }
         loadCatalog("")
+    }
+
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!CatalogAndroidKeyPolicy.recognizes(event.keyCode)) {
+            return super.dispatchKeyEvent(event)
+        }
+        CatalogAndroidKeyPolicy.command(event.keyCode, event.action, event.repeatCount)?.let {
+            catalogControllerCommands.tryEmit(it)
+        }
+        return true
     }
 
     override fun onDestroy() {

@@ -3,7 +3,6 @@ package dev.yougotserved.thorium
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,13 +15,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -30,9 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,15 +41,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
@@ -58,10 +51,12 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun CatalogScreen(
@@ -71,25 +66,22 @@ fun CatalogScreen(
     onSearch: (String) -> Unit,
     onAction: (CatalogItem) -> Unit,
     onBack: () -> Unit,
+    controllerCommands: Flow<CatalogControllerCommand>,
 ) {
     var query by remember { mutableStateOf("") }
-    var selected by remember { mutableIntStateOf(0) }
-    var searchFocused by remember { mutableStateOf(false) }
-    val catalogFocusRequester = remember { FocusRequester() }
+    var focus by remember { mutableStateOf(CatalogFocus()) }
+    var searchInputFocused by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
-    val pressedKeys = remember { mutableSetOf<CatalogControllerKey>() }
+    val focusManager = LocalFocusManager.current
     val gridState = rememberLazyGridState()
     val matches = items.filter { item ->
         query.isBlank() || item.game.title.contains(query, ignoreCase = true) ||
             item.game.tagline.contains(query, ignoreCase = true)
     }
-
-    LaunchedEffect(matches.size) {
-        selected = selected.coerceIn(0, (matches.size - 1).coerceAtLeast(0))
-    }
-    LaunchedEffect(selected, matches.size) {
-        if (matches.isNotEmpty()) gridState.animateScrollToItem(selected)
-    }
+    val currentMatches by rememberUpdatedState(matches)
+    val currentOnAction by rememberUpdatedState(onAction)
+    val currentOnSearch by rememberUpdatedState(onSearch)
+    val currentOnBack by rememberUpdatedState(onBack)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -100,38 +92,64 @@ fun CatalogScreen(
                 ),
             ),
     ) {
-        val gridSpacing = 14.dp
-        val availableWidth = maxWidth - 48.dp
+        val gridSpacing = 16.dp
+        val availableWidth = maxWidth - 40.dp
         val columnCount = ((availableWidth.value + gridSpacing.value) /
             (MINIMUM_CARD_WIDTH.value + gridSpacing.value)).toInt().coerceAtLeast(1)
+        val searchWidth = (maxWidth * 0.34f).coerceIn(180.dp, 270.dp)
 
-        fun handle(command: CatalogControllerCommand) {
-            when (command) {
-                CatalogControllerCommand.MOVE_UP,
-                CatalogControllerCommand.MOVE_DOWN,
-                CatalogControllerCommand.MOVE_LEFT,
-                CatalogControllerCommand.MOVE_RIGHT,
-                -> {
-                    selected = CatalogControllerPolicy.moveSelection(
-                        selected = selected,
-                        itemCount = matches.size,
-                        columnCount = columnCount,
-                        command = command,
-                    )
-                    catalogFocusRequester.requestFocus()
-                }
-                CatalogControllerCommand.ACTIVATE -> matches.getOrNull(selected)?.let(onAction)
-                CatalogControllerCommand.SEARCH -> searchFocusRequester.requestFocus()
-                CatalogControllerCommand.REFRESH -> onSearch(query)
-                CatalogControllerCommand.BACK_OR_CLEAR -> when (
-                    CatalogControllerPolicy.backDecision(query, searchFocused)
-                ) {
-                    CatalogBackDecision.CLEAR_SEARCH -> {
-                        query = ""
-                        onSearch("")
-                        catalogFocusRequester.requestFocus()
+        LaunchedEffect(matches.size) {
+            focus = CatalogFocusPolicy.normalized(focus, matches.size)
+        }
+        LaunchedEffect(focus.target, focus.cardIndex, matches.size) {
+            if (focus.target == CatalogFocusTarget.CARD && matches.isNotEmpty()) {
+                gridState.animateScrollToItem(focus.cardIndex)
+            }
+        }
+        LaunchedEffect(controllerCommands, columnCount) {
+            controllerCommands.collect { command ->
+                when (command) {
+                    CatalogControllerCommand.MOVE_UP,
+                    CatalogControllerCommand.MOVE_DOWN,
+                    CatalogControllerCommand.MOVE_LEFT,
+                    CatalogControllerCommand.MOVE_RIGHT,
+                    -> {
+                        focusManager.clearFocus()
+                        focus = CatalogFocusPolicy.move(
+                            focus = focus,
+                            command = command,
+                            itemCount = currentMatches.size,
+                            columnCount = columnCount,
+                        )
                     }
-                    CatalogBackDecision.NAVIGATE_BACK -> onBack()
+                    CatalogControllerCommand.ACTIVATE -> when (
+                        CatalogFocusPolicy.activation(focus, currentMatches.size)
+                    ) {
+                        CatalogActivation.ACTIVATE_CARD ->
+                            currentMatches.getOrNull(focus.cardIndex)?.let(currentOnAction)
+                        CatalogActivation.FOCUS_SEARCH -> searchFocusRequester.requestFocus()
+                        CatalogActivation.REFRESH -> currentOnSearch(query)
+                        null -> Unit
+                    }
+                    CatalogControllerCommand.SEARCH -> {
+                        focus = focus.copy(target = CatalogFocusTarget.SEARCH)
+                        searchFocusRequester.requestFocus()
+                    }
+                    CatalogControllerCommand.REFRESH -> {
+                        focusManager.clearFocus()
+                        focus = focus.copy(target = CatalogFocusTarget.REFRESH)
+                        currentOnSearch(query)
+                    }
+                    CatalogControllerCommand.BACK_OR_CLEAR -> when (
+                        CatalogFocusPolicy.backDecision(query, searchInputFocused)
+                    ) {
+                        CatalogBackDecision.CLEAR_SEARCH -> {
+                            query = ""
+                            focusManager.clearFocus()
+                            currentOnSearch("")
+                        }
+                        CatalogBackDecision.NAVIGATE_BACK -> currentOnBack()
+                    }
                 }
             }
         }
@@ -139,61 +157,58 @@ fun CatalogScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .focusRequester(catalogFocusRequester)
-                .onPreviewKeyEvent { event ->
-                    val input = event.toCatalogControllerInput(pressedKeys)
-                        ?: return@onPreviewKeyEvent false
-                    CatalogControllerPolicy.command(input)?.let(::handle)
-                    true
-                }
-                .focusable()
-                .semantics { contentDescription = "Thorium game catalog" }
-                .padding(horizontal = 24.dp, vertical = 18.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
-            CatalogHeader()
-            Spacer(Modifier.height(12.dp))
+            CatalogTopBar(
+                query = query,
+                searchWidth = searchWidth,
+                searchSelected = focus.target == CatalogFocusTarget.SEARCH,
+                refreshSelected = focus.target == CatalogFocusTarget.REFRESH,
+                loading = loading,
+                searchFocusRequester = searchFocusRequester,
+                onSearchFocused = {
+                    searchInputFocused = it
+                    if (it) focus = focus.copy(target = CatalogFocusTarget.SEARCH)
+                },
+                onQueryChanged = { query = it },
+                onSearch = { currentOnSearch(query) },
+                onRefresh = {
+                    focus = focus.copy(target = CatalogFocusTarget.REFRESH)
+                    currentOnSearch(query)
+                },
+            )
+            Spacer(Modifier.height(8.dp))
+            CatalogLegend()
+            CatalogStatus(error = error)
+            Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
             ) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(searchFocusRequester)
-                        .onFocusChanged { searchFocused = it.isFocused },
-                    label = { Text("Search games") },
-                    singleLine = true,
-                    keyboardActions = KeyboardActions(onDone = { onSearch(query) }),
-                )
-                Button(onClick = { onSearch(query) }) { Text("Search") }
-                Button(onClick = { onSearch(query) }) { Text("Refresh") }
-            }
-            Spacer(Modifier.height(10.dp))
-
-            if (loading) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.width(24.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Loading catalog…", color = Color(0xFFD5D0E4))
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-            error?.let { message ->
                 Text(
-                    text = message,
-                    color = Color(0xFFFFA8A8),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    text = "Game library",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.semantics { heading() },
                 )
-                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "${matches.size} ${if (matches.size == 1) "game" else "games"}",
+                    color = Color(0xFFAAA6BD),
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
+            Spacer(Modifier.height(8.dp))
 
             if (!loading && matches.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "No games found. Try a shorter search.",
+                        text = if (query.isBlank()) {
+                            "No games are available right now."
+                        } else {
+                            "No games match your search."
+                        },
                         color = Color(0xFFAAA6BD),
                     )
                 }
@@ -209,20 +224,13 @@ fun CatalogScreen(
                         items = matches,
                         key = { _, item -> "${item.game.packageId}:${item.game.contentDigest}" },
                     ) { index, item ->
-                        GameCard(
+                        GameCoverCard(
                             item = item,
-                            focused = CatalogControllerPolicy.isCardFocused(
-                                selected = selected,
-                                index = index,
-                                searchFocused = searchFocused,
-                            ),
-                            onSelect = {
-                                selected = index
-                                catalogFocusRequester.requestFocus()
-                            },
+                            selected = focus.target == CatalogFocusTarget.CARD &&
+                                focus.cardIndex == index,
                             onAction = {
-                                selected = index
-                                onAction(item)
+                                focus = CatalogFocus(CatalogFocusTarget.CARD, index)
+                                currentOnAction(item)
                             },
                         )
                     }
@@ -230,16 +238,25 @@ fun CatalogScreen(
             }
         }
     }
-
-    LaunchedEffect(Unit) { catalogFocusRequester.requestFocus() }
 }
 
 @Composable
-private fun CatalogHeader() {
+private fun CatalogTopBar(
+    query: String,
+    searchWidth: Dp,
+    searchSelected: Boolean,
+    refreshSelected: Boolean,
+    loading: Boolean,
+    searchFocusRequester: FocusRequester,
+    onSearchFocused: (Boolean) -> Unit,
+    onQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+    onRefresh: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -250,39 +267,137 @@ private fun CatalogHeader() {
                 letterSpacing = 3.sp,
             )
             Text(
-                text = "Pick something quick.",
+                text = "Ready to play",
                 color = Color.White,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Black,
                 modifier = Modifier.semantics { heading() },
             )
         }
-        Text(
-            text = "D-pad Navigate  ·  A Select  ·  X Search  ·  Y Refresh  ·  B Back",
-            color = Color(0xFFAAA6BD),
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.End,
-            maxLines = 2,
-            modifier = Modifier.weight(1f),
+        Box(
+            modifier = Modifier
+                .width(searchWidth)
+                .clip(RoundedCornerShape(14.dp))
+                .border(
+                    width = if (searchSelected) 3.dp else 1.dp,
+                    color = if (searchSelected) Color(0xFF67E8F9) else Color(0xFF39344A),
+                    shape = RoundedCornerShape(14.dp),
+                )
+                .padding(2.dp),
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChanged,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(searchFocusRequester)
+                    .onFocusChanged { onSearchFocused(it.isFocused) }
+                    .semantics { selected = searchSelected },
+                label = { Text("Search") },
+                singleLine = true,
+                keyboardActions = KeyboardActions(onDone = { onSearch() }),
+            )
+        }
+        UtilityButton(
+            label = if (loading) "Loading" else "Refresh",
+            selected = refreshSelected,
+            enabled = !loading,
+            onClick = onRefresh,
         )
     }
 }
 
 @Composable
-private fun GameCard(
+private fun UtilityButton(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val background = when {
+        !enabled -> Color(0xFF282536)
+        selected -> Color(0xFF164E63)
+        else -> Color(0xFF1F1B2E)
+    }
+    Box(
+        modifier = Modifier
+            .widthIn(min = 92.dp)
+            .height(54.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(background)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) Color(0xFF67E8F9) else Color(0xFF39344A),
+                shape = RoundedCornerShape(14.dp),
+            )
+            .semantics {
+                this.selected = selected
+                stateDescription = label
+                role = Role.Button
+            }
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = if (enabled) Color.White else Color(0xFFAAA6BD),
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun CatalogLegend() {
+    Text(
+        text = "D-pad  Move     A  Select     X  Search     Y  Refresh     B  Back",
+        color = Color(0xFFAAA6BD),
+        style = MaterialTheme.typography.labelMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun CatalogStatus(error: String?) {
+    error?.let { message ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = message,
+            color = Color(0xFFFFA8A8),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+    }
+}
+
+@Composable
+private fun GameCoverCard(
     item: CatalogItem,
-    focused: Boolean,
-    onSelect: () -> Unit,
+    selected: Boolean,
     onAction: () -> Unit,
 ) {
     val game = item.game
     val accent = Color(game.accent)
     val enabled = item.actionState != CatalogActionState.INSTALLING
     val actionLabel = when (item.actionState) {
-        CatalogActionState.INSTALLED -> "Play"
-        CatalogActionState.AVAILABLE -> "Install"
-        CatalogActionState.INSTALLING -> "Installing"
-        CatalogActionState.INSTALL_ERROR -> "Retry"
+        CatalogActionState.INSTALLED -> "Installed · Play"
+        CatalogActionState.AVAILABLE -> "Download · Install"
+        CatalogActionState.INSTALLING -> "Installing…"
+        CatalogActionState.INSTALL_ERROR -> "Install failed · Retry"
+    }
+    val actionColor = when (item.actionState) {
+        CatalogActionState.INSTALLED -> Color(0xFF047857)
+        CatalogActionState.AVAILABLE -> accent
+        CatalogActionState.INSTALLING -> Color(0xFF4B5563)
+        CatalogActionState.INSTALL_ERROR -> Color(0xFFB91C1C)
     }
     val initials = remember(game.title) {
         game.title.trim().split(Regex("\\s+"))
@@ -296,17 +411,16 @@ private fun GameCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 132.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (focused) Color(0xFF29213F) else Color(0xFF1F1B2E))
+            .heightIn(min = 184.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) Color(0xFF29213F) else Color(0xFF1F1B2E))
             .border(
-                width = if (focused) 3.dp else 1.dp,
-                color = if (focused) accent else Color(0xFF39344A),
-                shape = RoundedCornerShape(18.dp),
+                width = if (selected) 4.dp else 1.dp,
+                color = if (selected) Color(0xFF67E8F9) else Color(0xFF39344A),
+                shape = RoundedCornerShape(20.dp),
             )
-            .onFocusChanged { if (it.isFocused) onSelect() }
             .semantics(mergeDescendants = true) {
-                selected = focused
+                this.selected = selected
                 stateDescription = actionLabel
                 role = Role.Button
             }
@@ -315,100 +429,87 @@ private fun GameCard(
                 role = Role.Button,
                 onClickLabel = actionLabel,
                 onClick = onAction,
-            )
-            .padding(16.dp),
+            ),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .width(54.dp)
-                    .height(54.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(listOf(accent, Color(0xFF22D3EE)))),
-                contentAlignment = Alignment.Center,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(92.dp)
+                .background(
+                    Brush.linearGradient(
+                        listOf(accent, Color(0xFF155E75), Color(0xFF111827)),
+                    ),
+                )
+                .padding(14.dp),
+        ) {
+            Text(
+                text = initials,
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
+            Text(
+                text = game.version,
+                color = Color(0xFFD5F7FB),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
+        }
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = game.title,
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = game.tagline,
+                color = Color(0xFFD5D0E4),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(initials, color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = game.title,
+                    text = game.playerLabel,
+                    color = Color(0xFF8DE8F4),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = actionLabel,
                     color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(actionColor)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+            }
+            item.error?.let { message ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = message,
+                    color = Color(0xFFFFA8A8),
+                    style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = game.tagline,
-                    color = Color(0xFFD5D0E4),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = game.playerLabel,
-                color = Color(0xFF8DE8F4),
-                style = MaterialTheme.typography.labelSmall,
-            )
-            Text(
-                text = actionLabel,
-                color = if (enabled) Color.White else Color(0xFFAAA6BD),
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (enabled) accent else Color(0xFF39344A))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-        item.error?.let { message ->
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = message,
-                color = Color(0xFFFFA8A8),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
     }
 }
 
-private fun KeyEvent.toCatalogControllerInput(
-    pressedKeys: MutableSet<CatalogControllerKey>,
-): CatalogControllerInput? {
-    val controllerKey = key.toCatalogControllerKey() ?: return null
-    val phase = when (type) {
-        KeyEventType.KeyDown -> ControllerKeyPhase.DOWN
-        KeyEventType.KeyUp -> ControllerKeyPhase.UP
-        else -> return null
-    }
-    val repeatCount = when (phase) {
-        ControllerKeyPhase.DOWN -> if (pressedKeys.add(controllerKey)) 0 else 1
-        ControllerKeyPhase.UP -> {
-            pressedKeys.remove(controllerKey)
-            0
-        }
-    }
-    return CatalogControllerInput(controllerKey, phase, repeatCount)
-}
-
-private fun Key.toCatalogControllerKey(): CatalogControllerKey? = when (this) {
-    Key.DirectionUp -> CatalogControllerKey.DPAD_UP
-    Key.DirectionDown -> CatalogControllerKey.DPAD_DOWN
-    Key.DirectionLeft -> CatalogControllerKey.DPAD_LEFT
-    Key.DirectionRight -> CatalogControllerKey.DPAD_RIGHT
-    Key.ButtonA -> CatalogControllerKey.BUTTON_A
-    Key.ButtonX -> CatalogControllerKey.BUTTON_X
-    Key.ButtonY -> CatalogControllerKey.BUTTON_Y
-    Key.ButtonB -> CatalogControllerKey.BUTTON_B
-    else -> null
-}
-
-private val MINIMUM_CARD_WIDTH = 280.dp
+private val MINIMUM_CARD_WIDTH = 286.dp
