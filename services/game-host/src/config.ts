@@ -44,6 +44,12 @@ const Environment = z.object({
 
 export type GameHostConfig = z.infer<typeof Environment>;
 
+/** Colyseus clients prepend the WebSocket scheme to this advertised address. */
+export function colyseusPublicAddress(publicEndpoint: string): string {
+  const endpoint = new URL(publicEndpoint);
+  return `${endpoint.host}${endpoint.pathname}`;
+}
+
 export function loadConfig(environment: NodeJS.ProcessEnv): GameHostConfig {
   const config = Environment.parse(environment);
   if (!config.PUBLIC_ENDPOINT.endsWith(config.BASE_PATH)) {

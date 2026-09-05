@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { defineServer } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import type { GameHostConfig } from "./config.js";
+import { colyseusPublicAddress, type GameHostConfig } from "./config.js";
 import { AdmissionService } from "./admission.js";
 import {
   configureColyseusCors,
@@ -58,7 +58,7 @@ export async function createGameHostRuntime(config: GameHostConfig): Promise<Gam
   const server = defineServer({
     rooms: {},
     routes: createPrefixedMatchmakerRouter(config.BASE_PATH, transport),
-    publicAddress: config.PUBLIC_ENDPOINT,
+    publicAddress: colyseusPublicAddress(config.PUBLIC_ENDPOINT),
     transport,
     express: (app) => {
       const healthHandler = (_request: unknown, response: {

@@ -1,5 +1,12 @@
+import { Client, type SeatReservation } from "@colyseus/sdk";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { colyseusPublicAddress, loadConfig } from "../src/config.js";
+
+class EndpointProbeClient extends Client {
+  socketEndpoint(reservation: SeatReservation): string {
+    return this.buildEndpoint(reservation);
+  }
+}
 
 describe("game host config", () => {
   it("accepts normal runtime-owned process environment entries", () => {
@@ -21,5 +28,19 @@ describe("game host config", () => {
       PORT: 2_568,
       PUBLIC_ENDPOINT: "https://games.yougotserved.dev/play",
     });
+  });
+
+  it("advertises a scheme-free Colyseus socket address with the public path", () => {
+    const publicAddress = colyseusPublicAddress("https://games.yougotserved.dev/play");
+    expect(publicAddress).toBe("games.yougotserved.dev/play");
+
+    const client = new EndpointProbeClient("https://games.yougotserved.dev/play");
+    expect(client.socketEndpoint({
+      name: "g_0123456789abcdef0123456789abcdef",
+      publicAddress,
+      processId: "process",
+      roomId: "room",
+      sessionId: "session",
+    })).toBe("wss://games.yougotserved.dev/play/process/room?");
   });
 });
