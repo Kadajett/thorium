@@ -1,87 +1,61 @@
 import { readFileSync } from "node:fs";
-import { z } from "zod";
-import type {
-  ExactGameRelease,
-  GameHostRegistryPort,
-  GameSessionFinishReason,
-  RegistryFence,
-  SurfaceAdmission,
-} from "@thorium/game-host-api";
+import type { ExactGameRelease, GameHostRegistryPort } from "@thorium/game-host-api";
+import {
+  admittedRegistryFence,
+  assertRegistryRelease,
+  assertRegistrySuccess,
+  registryActive,
+  registryAdmissionBody,
+  registryServiceToken,
+} from "./core/registry-policy.js";
+import { createRegistryRequest, type RegistryRequest } from "./registry-http.js";
 
-const RegistryResult = z.strictObject({ ok: z.literal(true) }).passthrough();
-const FenceResult = z.strictObject({ active: z.boolean() });
-
-function sameRelease(left: ExactGameRelease, right: ExactGameRelease): boolean {
-  return left.packageId === right.packageId && left.version === right.version
-    && left.contentDigest === right.contentDigest;
+export interface PlatformRegistryOptions {
+  readonly endpoint: string;
+  readonly serviceTokenFile: string;
+  readonly fetch?: typeof fetch;
+}
+export interface PlatformRegistryPort {
+  readonly scoped: (release: ExactGameRelease) => GameHostRegistryPort;
 }
 
-export class PlatformRegistryClient {
-  readonly #endpoint: string;
-  readonly #serviceToken: string;
-  readonly #fetch: typeof fetch;
+function scopedRegistry(release: ExactGameRelease, request: RegistryRequest): GameHostRegistryPort {
+  return {
+    admit: async (admission, roomInstanceId) => {
+      const fence = admittedRegistryFence(release, admission, roomInstanceId);
+      assertRegistrySuccess(await request("admit", registryAdmissionBody(fence, admission)));
+      return fence;
+    },
+    isActive: async (fence) => {
+      assertRegistryRelease(release, fence.release);
+      return registryActive(await request("fence", fence));
+    },
+    finish: async (fence, reason) => {
+      assertRegistryRelease(release, fence.release);
+      assertRegistrySuccess(await request("finish", { ...fence, reason }));
+    },
+  };
+}
 
-  constructor(options: {
-    readonly endpoint: string;
-    readonly serviceTokenFile: string;
-    readonly fetch?: typeof fetch;
-  }) {
-    this.#endpoint = options.endpoint.replace(/\/+$/, "");
-    this.#serviceToken = readFileSync(options.serviceTokenFile, "utf8").trim();
-    if (
-      this.#serviceToken.length < 32 || this.#serviceToken.length > 4_096
-      || /\s/.test(this.#serviceToken)
-    ) throw new Error("invalid_game_host_service_token");
-    this.#fetch = options.fetch ?? fetch;
+/** File/HTTP effects are owned here; scope and response policy are pure. */
+export function createPlatformRegistryClient(
+  options: PlatformRegistryOptions,
+): PlatformRegistryPort {
+  const request = createRegistryRequest({
+    endpoint: options.endpoint,
+    serviceToken: registryServiceToken(readFileSync(options.serviceTokenFile, "utf8")),
+    fetch: options.fetch ?? fetch,
+  });
+  return { scoped: (release) => scopedRegistry(Object.freeze({ ...release }), request) };
+}
+
+/** Compatibility constructor delegates to the factory without duplicating policy. */
+export class PlatformRegistryClient implements PlatformRegistryPort {
+  readonly #port: PlatformRegistryPort;
+  constructor(options: PlatformRegistryOptions) {
+    this.#port = createPlatformRegistryClient(options);
   }
-
   scoped(release: ExactGameRelease): GameHostRegistryPort {
-    return {
-      admit: async (admission, roomInstanceId) => {
-        if (!sameRelease(admission.release, release)) throw new Error("registry_release_mismatch");
-        const fence: RegistryFence = {
-          gameSessionId: admission.gameSessionId,
-          generation: admission.generation,
-          roomInstanceId,
-          release,
-        };
-        await this.#request("admit", {
-          ...fence,
-          capabilityId: admission.capabilityId,
-          surfaceId: admission.surfaceId,
-          role: admission.role,
-          playerSlots: admission.playerSlots,
-        }, RegistryResult);
-        return fence;
-      },
-      isActive: async (fence) => {
-        if (!sameRelease(fence.release, release)) throw new Error("registry_release_mismatch");
-        return (await this.#request("fence", fence, FenceResult)).active;
-      },
-      finish: async (fence, reason) => {
-        if (!sameRelease(fence.release, release)) throw new Error("registry_release_mismatch");
-        await this.#request("finish", { ...fence, reason }, RegistryResult);
-      },
-    };
-  }
-
-  async #request<T>(
-    operation: "admit" | "fence" | "finish",
-    body: unknown,
-    schema: z.ZodType<T>,
-  ): Promise<T> {
-    const response = await this.#fetch(`${this.#endpoint}/v1/game-host/${operation}`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${this.#serviceToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(3_000),
-    });
-    const raw = await response.text();
-    if (!response.ok) throw new Error(`platform_registry_${operation}_rejected:${response.status}`);
-    if (Buffer.byteLength(raw) > 16_384) throw new Error("platform_registry_response_too_large");
-    return schema.parse(JSON.parse(raw) as unknown);
+    return this.#port.scoped(release);
   }
 }

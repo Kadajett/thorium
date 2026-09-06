@@ -15,7 +15,7 @@ const PACKAGE_PATH = z.string().max(1_024).refine((value) => {
     && segments.every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }, "must be a safe relative package path");
 const SurfaceRole = z.enum(["main", "companion"]);
-const Capability = z.enum(["same-device-peer", "colyseus-session"]);
+const Capability = z.enum(["same-device-peer", "colyseus-session", "local-save-v1"]);
 const ControlId = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
 const ControllerButtonInput = z.enum([
   "south",
@@ -123,7 +123,7 @@ const ManifestSchema = z.strictObject({
     kind: z.enum(["button", "axis"]),
   })).min(1).max(128),
   controllerBindings: ControllerBindingsSchema.optional(),
-  capabilities: z.array(Capability).max(2),
+  capabilities: z.array(Capability).max(3),
   budgets: z.strictObject({
     maxPackageBytes: z.number().int().min(1).max(134_217_728),
     maxFileCount: z.number().int().min(1).max(2_048),
@@ -250,7 +250,7 @@ const DescriptorSchema = z.strictObject({
     companion: PACKAGE_PATH,
     files: z.array(DescriptorFileSchema).min(1).max(2_048),
   }),
-  capabilities: z.array(Capability).max(2),
+  capabilities: z.array(Capability).max(3),
   bundle: z.strictObject({
     fileName: z.string().max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/),
     sha256: SHA256,

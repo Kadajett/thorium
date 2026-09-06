@@ -127,10 +127,8 @@ export interface ThoriumGameHostContext {
 export interface ThoriumGameRoomDefinition {
   readonly localName: string;
   readonly kind: GameRoomKind;
-  // Colyseus constructs rooms internally and defines its public constructor
-  // constraint with `any[]`; modules do not invoke this constructor themselves.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly roomClass: new (...args: any[]) => Room;
+  // Colyseus constructs rooms without arguments; module context stays in the factory.
+  readonly roomClass: new () => Room;
   readonly filterBy?: readonly string[];
 }
 

@@ -1,0 +1,60 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 6759bed9c36c616e915e2336081fe3477dbf3559..266bba340c8c29dad286b89e41fdb8618777bd10 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -126,20 +126,16 @@ function getTypeData(type, typeNode) {
+  * Cache a value by its type
+  */
+ function cacheData(program, cache, typeData, value) {
+-    const checker = program.getTypeChecker();
+-    const identity = checker.getRecursionIdentity(typeData.type);
+-    if (typeData.typeNode !== null) {
+-        cache.set(typeData.typeNode, value);
+-    }
+-    cache.set(identity, value);
++    // Recursion identities collapse distinct generic instantiations (such as
++    // ReadonlyArray<string> and ReadonlyArray<{ mutable: number }>).
++    // The resolved Type retains the element arguments and is stable for cycles.
++    cache.set(typeData.type, value);
+ }
+ /**
+  * Get a value by its cashed type.
+  */
+ function getCachedData(program, cache, typeData) {
+-    const checker = program.getTypeChecker();
+-    const identity = typeData.typeNode ?? checker.getRecursionIdentity(typeData.type);
+-    return cache.get(identity);
++    return cache.get(typeData.type);
+ }
+ /**
+  * Does the given type/typeNode match the given specifier.
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 3bd08083cd4d1593c7a433bd7655ac5c54d9d9bb..fc170eb8c56947674add335bb6b7a9bf6317fc27 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -124,20 +124,16 @@ function getTypeData(type, typeNode) {
+  * Cache a value by its type
+  */
+ function cacheData(program, cache, typeData, value) {
+-    const checker = program.getTypeChecker();
+-    const identity = checker.getRecursionIdentity(typeData.type);
+-    if (typeData.typeNode !== null) {
+-        cache.set(typeData.typeNode, value);
+-    }
+-    cache.set(identity, value);
++    // Recursion identities collapse distinct generic instantiations (such as
++    // ReadonlyArray<string> and ReadonlyArray<{ mutable: number }>).
++    // The resolved Type retains the element arguments and is stable for cycles.
++    cache.set(typeData.type, value);
+ }
+ /**
+  * Get a value by its cashed type.
+  */
+ function getCachedData(program, cache, typeData) {
+-    const checker = program.getTypeChecker();
+-    const identity = typeData.typeNode ?? checker.getRecursionIdentity(typeData.type);
+-    return cache.get(identity);
++    return cache.get(typeData.type);
+ }
+ /**
+  * Does the given type/typeNode match the given specifier.

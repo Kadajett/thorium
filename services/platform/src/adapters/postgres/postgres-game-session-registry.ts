@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { normalizeActivation, normalizePlayerSlots, validRelease, type NormalizedActivation } from "../../core/session-activation.js";
 import type {
   ActivateGameSession,
   ActivateGameSessionResult,
@@ -81,26 +82,7 @@ interface ActiveFenceRow extends Record<string, unknown> {
   readonly active: boolean;
 }
 
-interface NormalizedSurface {
-  readonly surfaceId: string;
-  readonly role: "main" | "companion";
-  readonly playerSlots: readonly number[];
-}
-
-interface NormalizedActivation {
-  readonly requestId: string;
-  readonly accountId: string;
-  readonly release: ExactGameRelease;
-  readonly surfaces: readonly NormalizedSurface[];
-}
-
-const surfaceIdPattern = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const roleOrder: Readonly<Record<NormalizedSurface["role"], number>> = {
-  main: 0,
-  companion: 1,
-};
-
 /**
  * PostgreSQL-backed registry for the durable, account-scoped Game Session
  * lifecycle. The database transaction, not a process-local cache, owns the
@@ -120,7 +102,7 @@ export class PostgresGameSessionRegistry implements GameSessionRegistry {
 
   async activate(input: ActivateGameSession): Promise<ActivateGameSessionResult> {
     const normalized = normalizeActivation(input);
-    if (normalized === null) {
+    if ("conflict" in normalized) {
       return activationConflict(
         "INVALID_ACTIVATION",
         "The Game Session activation is invalid.",
@@ -573,91 +555,6 @@ export class PostgresGameSessionRegistry implements GameSessionRegistry {
   }
 }
 
-function normalizeActivation(input: ActivateGameSession): NormalizedActivation | null {
-  if (
-    !boundedString(input.requestId, 128)
-    || !boundedString(input.accountId, 128)
-    || !validRelease(input.release)
-    || !Array.isArray(input.surfaces)
-    || input.surfaces.length < 1
-    || input.surfaces.length > 2
-  ) {
-    return null;
-  }
-
-  const surfaceIds = new Set<string>();
-  const roles = new Set<string>();
-  const leasedSlots = new Set<number>();
-  const surfaces: NormalizedSurface[] = [];
-  for (const surface of input.surfaces) {
-    if (typeof surface !== "object" || surface === null) {
-      return null;
-    }
-    const playerSlots = normalizePlayerSlots(surface.playerSlots);
-    if (
-      typeof surface.surfaceId !== "string"
-      || !surfaceIdPattern.test(surface.surfaceId)
-      || (surface.role !== "main" && surface.role !== "companion")
-      || playerSlots === null
-      || surfaceIds.has(surface.surfaceId)
-      || roles.has(surface.role)
-      || playerSlots.some((slot) => leasedSlots.has(slot))
-    ) {
-      return null;
-    }
-    surfaceIds.add(surface.surfaceId);
-    roles.add(surface.role);
-    playerSlots.forEach((slot) => leasedSlots.add(slot));
-    surfaces.push({
-      surfaceId: surface.surfaceId,
-      role: surface.role,
-      playerSlots,
-    });
-  }
-  if (leasedSlots.size === 0) {
-    return null;
-  }
-
-  surfaces.sort((left, right) =>
-    roleOrder[left.role] - roleOrder[right.role]
-    || left.surfaceId.localeCompare(right.surfaceId));
-  return {
-    requestId: input.requestId,
-    accountId: input.accountId,
-    release: {
-      packageId: input.release.packageId,
-      version: input.release.version,
-      contentDigest: input.release.contentDigest,
-    },
-    surfaces,
-  };
-}
-
-function normalizePlayerSlots(slots: readonly number[]): readonly number[] | null {
-  if (
-    !Array.isArray(slots)
-    || slots.length > 16
-    || slots.some((slot) => !Number.isInteger(slot) || slot < 0 || slot > 15)
-    || new Set(slots).size !== slots.length
-  ) {
-    return null;
-  }
-  return [...slots].sort((left, right) => left - right);
-}
-
-function validRelease(release: ExactGameRelease): boolean {
-  return typeof release === "object"
-    && release !== null
-    && typeof release.packageId === "string"
-    && release.packageId.length <= 128
-    && /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(release.packageId)
-    && typeof release.version === "string"
-    && release.version.length <= 64
-    && /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(release.version)
-    && typeof release.contentDigest === "string"
-    && /^[a-f0-9]{64}$/.test(release.contentDigest);
-}
-
 function activationFingerprint(input: NormalizedActivation): string {
   return createHash("sha256").update(JSON.stringify({
     release: input.release,
@@ -685,7 +582,7 @@ function playerSlotsOf(surface: SurfaceWithSlotsRow): readonly number[] {
   if (!Array.isArray(surface.player_slots)) {
     throw new Error("PostgreSQL returned an invalid Player Slot array");
   }
-  const slots = normalizePlayerSlots(surface.player_slots as unknown[] as number[]);
+  const slots = normalizePlayerSlots(surface.player_slots);
   if (slots === null) {
     throw new Error("PostgreSQL returned invalid Player Slots");
   }

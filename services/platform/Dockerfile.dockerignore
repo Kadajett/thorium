@@ -2,6 +2,9 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!tsconfig.strict.json
+!patches/
+!patches/**
 !services/
 !services/platform/
 !services/platform/package.json

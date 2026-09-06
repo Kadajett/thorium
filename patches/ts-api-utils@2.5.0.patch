@@ -1,0 +1,38 @@
+diff --git a/lib/index.cjs b/lib/index.cjs
+index 4208526d41ea41b7d3af3b359726996f979d9306..4f1fde53917a2f269a1a1cc0aa02730aaeddcb42 100644
+--- a/lib/index.cjs
++++ b/lib/index.cjs
+@@ -1187,6 +1187,14 @@ function isReadonlyPropertyIntersection(type, name, typeChecker) {
+         case true:
+           return true;
+       }
++      // An interface can inherit a mapped readonly member without being a mapped type itself.
++      // Match the inherited symbol exactly so an explicit mutable override is not accepted.
++      if (isObjectType(constituent) && isObjectFlagSet(constituent, ts9.ObjectFlags.ClassOrInterface)) {
++        const inherited = typeChecker.getBaseTypes(constituent).some((base) =>
++          getPropertyOfType(base, name) === prop && isPropertyReadonlyInType(base, name, typeChecker)
++        );
++        if (inherited) return true;
++      }
+     }
+     return (
+       // members of namespace import
+diff --git a/lib/index.js b/lib/index.js
+index 5902556d5b16f5f3972e219d9ccfecce9c6ca544..f30c8744985746ca2c914e3abc413f121ed95fa7 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1181,6 +1181,14 @@ function isReadonlyPropertyIntersection(type, name, typeChecker) {
+         case true:
+           return true;
+       }
++      // An interface can inherit a mapped readonly member without being a mapped type itself.
++      // Match the inherited symbol exactly so an explicit mutable override is not accepted.
++      if (isObjectType(constituent) && isObjectFlagSet(constituent, ts9.ObjectFlags.ClassOrInterface)) {
++        const inherited = typeChecker.getBaseTypes(constituent).some((base) =>
++          getPropertyOfType(base, name) === prop && isPropertyReadonlyInType(base, name, typeChecker)
++        );
++        if (inherited) return true;
++      }
+     }
+     return (
+       // members of namespace import

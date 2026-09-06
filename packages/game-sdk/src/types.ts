@@ -1,15 +1,21 @@
+import type {
+  LocalSaveGrant,
+  LocalSavePort,
+  LocalSaveRequest,
+  LocalSaveResponse,
+} from "./local-save-types.js";
 export type JsonPrimitive = null | boolean | number | string;
 export type JsonValue =
-  | JsonPrimitive
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue };
+  JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
 declare const playerSlotBrand: unique symbol;
 export type PlayerSlot = number & { readonly [playerSlotBrand]: true };
 
 export function playerSlot(value: number): PlayerSlot {
   if (!Number.isInteger(value) || value < 0 || value > 15) {
-    throw new RangeError(`PlayerSlot must be an integer from 0 through 15; received ${value}`);
+    throw new RangeError(
+      `PlayerSlot must be an integer from 0 through 15; received ${String(value)}`,
+    );
   }
   return value as PlayerSlot;
 }
@@ -66,6 +72,7 @@ export interface ColyseusSessionTicket {
 }
 
 export interface GameBootstrap {
+  readonly localSave?: LocalSaveGrant;
   readonly protocolVersion: 1;
   readonly surface: SurfaceRole;
   readonly game: {
@@ -133,22 +140,24 @@ export interface DualSurfaceGame {
 }
 
 export interface GameHost {
+  readonly localSave?: LocalSavePort;
   readonly bootstrap: PublicGameBootstrap;
-  emitControl(event: Omit<ControlEvent, "sequence">): void;
-  onControl(listener: (event: ControlEvent) => void): () => void;
-  sendToPeer(channel: string, payload: JsonValue): void;
-  onPeer(channel: string, listener: (event: PeerEvent) => void): () => void;
+  readonly emitControl: (event: Omit<ControlEvent, "sequence">) => void;
+  readonly onControl: (listener: (event: ControlEvent) => void) => () => void;
+  readonly sendToPeer: (channel: string, payload: JsonValue) => void;
+  readonly onPeer: (channel: string, listener: (event: PeerEvent) => void) => () => void;
   /** The same surface may claim its short-lived ticket only once. */
-  takeColyseusTicket(): ColyseusSessionTicket | undefined;
+  readonly takeColyseusTicket: () => ColyseusSessionTicket | undefined;
 }
 
 export interface HostTransport {
-  readBootstrap(): Promise<GameBootstrap>;
-  send(message: HostOutboundMessage): void;
-  subscribe(listener: (message: HostInboundMessage) => void): () => void;
+  readonly readBootstrap: () => Promise<GameBootstrap>;
+  readonly send: (message: HostOutboundMessage) => void;
+  readonly subscribe: (listener: (message: HostInboundMessage) => void) => () => void;
 }
 
 export type HostOutboundMessage =
+  | LocalSaveRequest
   | { readonly kind: "bootstrap-request"; readonly requestId: string }
   | { readonly kind: "ready"; readonly surface: SurfaceRole }
   | { readonly kind: "control"; readonly event: ControlEvent }
@@ -160,6 +169,7 @@ export type HostOutboundMessage =
     };
 
 export type HostInboundMessage =
+  | LocalSaveResponse
   | { readonly kind: "bootstrap"; readonly requestId: string; readonly bootstrap: GameBootstrap }
   | { readonly kind: "control"; readonly event: ControlEvent }
   | { readonly kind: "peer"; readonly event: PeerEvent }

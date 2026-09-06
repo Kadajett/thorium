@@ -5,3 +5,7 @@ packages:
 allowBuilds:
   esbuild: true
   msgpackr-extract: true
+
+patchedDependencies:
+  is-immutable-type@5.0.4: patches/is-immutable-type@5.0.4.patch
+  ts-api-utils@2.5.0: patches/ts-api-utils@2.5.0.patch

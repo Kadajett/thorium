@@ -156,7 +156,7 @@
     "capabilities": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["same-device-peer", "colyseus-session"] }
+      "items": { "enum": ["same-device-peer", "colyseus-session", "local-save-v1"] }
     },
     "budgets": {
       "type": "object",

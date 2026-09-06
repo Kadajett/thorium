@@ -1,0 +1,9 @@
+node_modules/
+**/dist/
+**/build/
+**/target/
+**/coverage/
+**/artifacts/
+**/vendor/
+pnpm-lock.yaml
+Cargo.lock

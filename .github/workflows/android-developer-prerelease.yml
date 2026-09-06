@@ -72,7 +72,7 @@ jobs:
         working-directory: apps/android
         env:
           THORIUM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.THORIUM_ANDROID_KEYSTORE_PASSWORD }}
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: ./gradlew --no-daemon :app:detekt :app:detektDebug :app:detektDebugUnitTest :app:detektDebugAndroidTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
       - name: Verify debug signature and create checksum
         env:
@@ -86,13 +86,17 @@ jobs:
           sha256sum thorium-developer-debug.apk > thorium-developer-debug.apk.sha256
           sha256sum --check thorium-developer-debug.apk.sha256
 
-      - name: Upload developer APK and checksum
+      - name: Generate in-app update metadata from the signed APK
+        run: node --import tsx tools/android-update/generate.mts artifacts/thorium-developer-debug.apk artifacts/thorium-android-update.json
+
+      - name: Upload developer APK, checksum, and update metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: thorium-android-developer-${{ github.run_id }}
           path: |
             artifacts/thorium-developer-debug.apk
             artifacts/thorium-developer-debug.apk.sha256
+            artifacts/thorium-android-update.json
           if-no-files-found: error
           retention-days: 14
 
@@ -147,17 +151,11 @@ jobs:
 
           This APK is signed with Thorium's stable developer-only debug key. It is not production-signed, is not a Play Store release, and is intended only for sideload testing. Builds from android-v0.1.0-dev.5 onward can be installed over one another; older runner-signed builds must be uninstalled once first.
 
-          dev.9 supersedes dev.8, whose catalog parser rejected the SDK 0.1.1 requirement declared by the newly published games. This build accepts the supported SDK versions and includes a regression using the actual published catalog.
+          The attached thorium-android-update.json is generated from this APK for compatible in-app update clients. An older APK without the updater needs one manual installation of an updater-enabled release. Updates still require user confirmation and must retain the same package identity and signing key.
 
-          It includes game-authored physical button and axis mappings, per-device input state, and routing to the owning player's screen. A single local player is assigned automatically; games with multiple local players prompt for controller assignment. Physical Thor validation remains required.
+          The launcher remains native Android/Compose. Games remain independently published web-v1 packages; online games connect through Thorium's shared game host. Installing an APK does not publish a game candidate or change an immutable game bundle.
 
-          It also fixes a reproduced Android launcher bug where the first D-pad press after touch mode focused Search instead of navigating the game cards. The selected card now retains real focus in touch mode; the actual Android event replay fails on dev.7 and passes on this build.
-
-          Install this APK before syncing games with controllerBindings profiles. The prior library navigation, separate display tasks, visible-surface rendering, and joystick focus containment remain included. Games remain server-published packages, and online games connect through Thorium's shared game host.
-
-          Serpent's black-screen startup failure was reproduced in Android WebView: its old bundled SDK rejected the shared host's generated room name. The corrected server-published game release is required as well as this APK; updating the APK alone cannot replace an immutable game bundle. Physical Thor confirmation remains outstanding, including the reported upper-screen/input behavior.
-
-          After installing, Sync the library and install/play Serpent 0.1.3 and Cinder 0.1.1. Retained older game versions are not automatically replaced by an APK update. Known remaining risk: one cold emulator launch timed out during WebView initialization; subsequent fresh-process launches completed. Cold-start performance and physical Thor behavior are not claimed fixed by these checks.
+          Verification details and remaining limitations are recorded in docs/quality.md, docs/android-app-updates.md, and docs/android-local-save-verification.md at this release tag. Source tests and emulator checks must not be read as physical AYN Thor performance or controller acceptance.
 
           The attached game SDK includes manifest validation, dual-screen preview, and the thorium-game publish command. Publishing uses a scoped token from the public publisher API; it does not require rebuilding the APK. The SDK and APK are built from this release tag, and neither requires a game repository to build.
 
@@ -166,6 +164,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "release-artifacts/thorium-developer-debug.apk#Developer-only Android debug APK" \
             "release-artifacts/thorium-developer-debug.apk.sha256#SHA-256 checksum" \
+            "release-artifacts/thorium-android-update.json#In-app update metadata" \
             "release-artifacts/thorium-game-sdk.tgz#Game author SDK" \
             "release-artifacts/thorium-game-sdk.tgz.sha256#SDK SHA-256 checksum" \
             --verify-tag \

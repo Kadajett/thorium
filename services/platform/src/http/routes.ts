@@ -13,6 +13,9 @@ import type { GameSessionRegistry } from "../session-registry/game-session-regis
 import type { SharedGameHostAuthority } from "../security/shared-game-host-authority.js";
 import { registerDeviceAccountRoutes } from "./device-account-routes.js";
 import { registerGameHostRoutes } from "./game-host-routes.js";
+import { registerCatalogRoutes } from "./catalog-routes.js";
+import { requireCurrentGameRelease } from "./current-game-release.js";
+import { HttpError } from "./http-error.js";
 import {
   registerPublisherRoutes,
   type PublisherHttpDependencies,
@@ -33,34 +36,6 @@ export interface HttpDependencies {
   readonly publisher?: PublisherHttpDependencies;
   readonly isReady?: () => Promise<boolean>;
 }
-
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-    readonly details?: unknown,
-  ) {
-    super(message);
-  }
-}
-
-const ListQuerySchema = z.strictObject({
-  limit: z.coerce.number().int().min(1).max(50).default(20),
-  cursor: z.string().min(1).max(256).optional(),
-});
-
-const SearchQuerySchema = ListQuerySchema.extend({
-  q: z.string().trim().min(1).max(100),
-});
-
-const DetailParamsSchema = z.strictObject({
-  packageId: z.string().min(1).max(128),
-});
-
-const DetailQuerySchema = z.strictObject({
-  version: z.string().min(1).max(64).optional(),
-});
 
 const PackageParamsSchema = z.strictObject({
   packageId: z.string().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/),
@@ -301,48 +276,7 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
     .head(async (request, response) => deliverPackageArtifact(request, response, dependencies))
     .get(async (request, response) => deliverPackageArtifact(request, response, dependencies));
 
-  app.get("/v1/catalog/games", async (request, response) => {
-    const query = parse(ListQuerySchema, request.query);
-    try {
-      const page = await dependencies.catalog.list({
-        limit: query.limit,
-        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-      });
-      response.json(page);
-    } catch (error) {
-      if (error instanceof Error && error.message === "invalid_catalog_cursor") {
-        throw new HttpError(400, "invalid_cursor", "The catalog cursor is invalid.");
-      }
-      throw error;
-    }
-  });
-
-  app.get("/v1/catalog/games/search", async (request, response) => {
-    const query = parse(SearchQuerySchema, request.query);
-    try {
-      const page = await dependencies.catalog.list({
-        query: query.q,
-        limit: query.limit,
-        ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
-      });
-      response.json(page);
-    } catch (error) {
-      if (error instanceof Error && error.message === "invalid_catalog_cursor") {
-        throw new HttpError(400, "invalid_cursor", "The catalog cursor is invalid.");
-      }
-      throw error;
-    }
-  });
-
-  app.get("/v1/catalog/games/:packageId", async (request, response) => {
-    const params = parse(DetailParamsSchema, request.params);
-    const query = parse(DetailQuerySchema, request.query);
-    const game = await dependencies.catalog.findById(params.packageId, query.version);
-    if (game === undefined) {
-      throw new HttpError(404, "game_not_found", "The requested game package was not found.");
-    }
-    response.json({ game });
-  });
+  registerCatalogRoutes(app, dependencies.catalog);
 
   if (dependencies.gameHost) {
     registerGameHostRoutes(app, dependencies.gameHost, dependencies.gameSessions);
@@ -359,17 +293,7 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
       throw new HttpError(401, "invalid_account_token", "The account token is invalid or expired.");
     }
 
-    const game = await dependencies.catalog.findById(body.release.packageId, body.release.version);
-    if (game === undefined) {
-      throw new HttpError(404, "game_not_found", "The requested game package was not found.");
-    }
-    if (game.contentDigest !== body.release.contentDigest) {
-      throw new HttpError(
-        409,
-        "game_release_mismatch",
-        "The requested content digest does not match the catalog Game Release.",
-      );
-    }
+    const game = await requireCurrentGameRelease(dependencies.catalog, body.release);
     validateSurfaceLeases(body.surfaces, game);
     if (game.multiplayer.requiresOnline && dependencies.gameHost === undefined) {
       throw new HttpError(
@@ -406,7 +330,8 @@ export function registerPlatformRoutes(app: Application, dependencies: HttpDepen
       );
     }
 
-    const ticketBundle = game.multiplayer.requiresOnline && dependencies.gameHost
+    // Offline support does not change which authority owns an online game session.
+    const ticketBundle = game.multiplayer.online && dependencies.gameHost
       ? await dependencies.gameHost.issueBundle(preparedTicketIssue, activationResult.activation)
       : await dependencies.sessionTickets.issueBundle(preparedTicketIssue, activationResult.activation);
 

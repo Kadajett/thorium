@@ -61,6 +61,39 @@ A failed or expired attempt does not make the capability reusable. In particular
 
 The connector is a separate package subpath and is not re-exported by `@thorium/game-sdk`. Games that only import the core runtime do not bundle the Colyseus client.
 
+## Local saves (unreleased rewrite)
+
+The optional `local-save-v1` manifest capability grants `host.localSave` on
+supporting hosts. Published SDK 0.1.2 and APK dev.9 do not expose this port.
+Always check for its presence and clearly indicate when progress cannot be saved.
+Do not use browser storage as a fallback: restricted surfaces do not provide
+durable DOM storage.
+
+The port provides `read(key)`, `write(key, value, expectedRevision)`, and
+`remove(key, expectedRevision)`. Reads return `null` or `{ revision, value }`;
+writes return the new revision. Pass `null` only when creating a missing key.
+Both surfaces share the verified game's package namespace across game releases;
+games cannot choose another package's namespace. These are device-local saves,
+not account-synced collections or authoritative online leaderboard records.
+
+Keep the game rules version and save schema version inside a JSON document.
+Validate loaded data before use. Preserve unknown or corrupt versions for recovery
+instead of overwriting them. Prefer one owning surface and one document per run;
+send only intentional public projections to the other surface.
+
+Writes use atomic revision checks. On `conflict`, stop autosaving and reload or
+ask the player to resolve the competing session. On `timeout` or `closed`, an
+already running write may still commit; reread before retrying and never blindly
+replace its expected revision. A successful response means the adapter completed
+the write, not merely that it queued work.
+
+Current host limits are 128 KiB UTF-8 per JSON value, 16 keys, and 512 KiB per
+package, with four outstanding requests per surface. Keys match
+`[a-z][a-z0-9._-]{0,63}`. Values must be plain JSON data; cycles, non-finite numbers,
+accessors, sparse arrays, custom objects, and serialization hooks are rejected.
+Quota failures preserve the previous value and revision. Local test adapters are
+not evidence of device persistence; that still needs Android runtime verification.
+
 ## Package validation
 
 Games can declare physical controls through an optional immutable

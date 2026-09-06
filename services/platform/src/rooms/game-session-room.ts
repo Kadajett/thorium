@@ -64,12 +64,12 @@ export function createGameSessionRoom(
     client: GameSessionClient;
     metadata: GameSessionOptions;
   }> {
-    state = new GameSessionState();
+    override state = new GameSessionState();
     #generation: number | undefined;
     #fencePollInFlight = false;
     #disconnectingForFence = false;
 
-    static async onAuth(
+    static override async onAuth(
       token: string | undefined,
       options: unknown,
       _context: AuthContext,
@@ -92,7 +92,7 @@ export function createGameSessionRoom(
       }
     }
 
-    onCreate(rawOptions: unknown): void {
+    override onCreate(rawOptions: unknown): void {
       const options = GameSessionOptionsSchema.parse(rawOptions);
       this.maxClients = 8;
       this.maxMessagesPerSecond = 120;
@@ -107,7 +107,7 @@ export function createGameSessionRoom(
       }, 1_000);
     }
 
-    async onJoin(client: GameSessionClient): Promise<void> {
+    override async onJoin(client: GameSessionClient): Promise<void> {
       const pending = client.auth;
       if (pending === undefined) {
         throw new ServerError(401, "session_ticket_required");
@@ -193,7 +193,7 @@ export function createGameSessionRoom(
       });
     }
 
-    messages = {
+    override messages = {
       game_input: validate(GameInputSchema, (client: GameSessionClient, input) => {
         const data = client.userData;
         if (data === undefined || !data.playerSlots.includes(input.playerSlot)) {
@@ -216,7 +216,7 @@ export function createGameSessionRoom(
       }),
     };
 
-    onDrop(client: GameSessionClient, code?: number): void {
+    override onDrop(client: GameSessionClient, code?: number): void {
       const data = client.userData;
       if (data === undefined) return;
       const surface = this.state.surfaces.get(data.surfaceId);
@@ -230,7 +230,7 @@ export function createGameSessionRoom(
       void this.allowReconnection(client, 20).catch(() => undefined);
     }
 
-    onReconnect(client: GameSessionClient): void {
+    override onReconnect(client: GameSessionClient): void {
       const data = client.userData;
       if (data !== undefined) {
         const surface = this.state.surfaces.get(data.surfaceId);
@@ -241,7 +241,7 @@ export function createGameSessionRoom(
       }
     }
 
-    onLeave(client: GameSessionClient): void {
+    override onLeave(client: GameSessionClient): void {
       const data = client.userData;
       if (data === undefined) {
         return;
@@ -256,7 +256,7 @@ export function createGameSessionRoom(
       }
     }
 
-    async onDispose(): Promise<void> {
+    override async onDispose(): Promise<void> {
       if (this.#generation === undefined) return;
       await gameSessions.finish({
         gameSessionId: this.state.gameSessionId,

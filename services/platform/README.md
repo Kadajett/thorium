@@ -8,9 +8,25 @@ room.
 platform can currently reach its durable PostgreSQL dependency and is the
 endpoint deployment systems should use before routing new work.
 
+## Current catalog releases
+
+Catalog list, search, and detail without a version select one current release per
+package: the most recent publication timestamp wins, followed by descending text
+version order for equal timestamps. This is publication order, not semantic-version
+precedence. PostgreSQL uses explicit C collation for deterministic package cursors
+and the text tie-breaker. The in-memory adapter follows the same ordering and
+parses timestamp offsets before handing immutable entries to the pure selector.
+
+Search examines current metadata only, with literal substring matching; an older
+matching title, summary, or tag cannot revive an old release. Pagination advances
+over unique package IDs. Catalog responses use `Cache-Control: no-store` so Play
+can preflight the current descriptor. `?version=` detail and immutable package
+archive URLs continue to resolve historical releases.
+
 ## Game Session contract
 
-Native hosts start an exact installed Game Release with `POST /v1/game-sessions`.
+Native hosts preflight the current catalog release, verify its cached package, and
+start that exact Game Release with `POST /v1/game-sessions`.
 The strict request names the package ID, semantic version, Release Descriptor
 content digest, and the numeric `PlayerSlot` leases for each Surface Role:
 
@@ -31,9 +47,19 @@ content digest, and the numeric `PlayerSlot` leases for each Surface Role:
 
 The bearer Account Session credential is accepted only by the native HTTP
 request. `requestId` is an idempotency UUID: the first successful activation
-returns `201`, and an identical retry while it remains active returns `200`
+returns `201`, and an identical retry while the release is still current and the
+session remains active returns `200`
 with the same Game Session and surface capability IDs. Reusing it for another
-payload is rejected. A successful response has `Cache-Control: no-store` and returns
+payload is rejected. A superseded release returns HTTP `409` with error code
+`game_update_required` and `error.details.currentRelease` containing the current
+package ID, version, and content digest. Exact digest mismatches are checked first
+and retain `game_release_mismatch`. The update check runs before registry mutation:
+it does not terminate an ongoing session. Retrying an old launch POST after a newer
+publication also requires an update. This is a latest-at-preflight check, not an
+atomic publication/activation fence. Offline-supported games still run offline
+through the host without creating an online Game Session.
+
+A successful response has `Cache-Control: no-store` and returns
 the configured `endpoint`, a `gameSessionId`, `roomName`, expiry, exact
 package-bound `joinOptions`, and a separate short-lived `ticket` for each
 surface. Account credentials and durable account IDs are never returned.

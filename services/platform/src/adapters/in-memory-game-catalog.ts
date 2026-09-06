@@ -1,75 +1,73 @@
-import type {
-  CatalogPage,
-  CatalogQuery,
-  GameRelease,
-} from "../domain/game-package.js";
+import type { CatalogPage, CatalogQuery, GameRelease } from "../domain/game-package.js";
 import type { GameCatalogRepository } from "../ports/game-catalog-repository.js";
-
-function encodeCursor(packageId: string): string {
-  return Buffer.from(packageId, "utf8").toString("base64url");
-}
-
-function decodeCursor(cursor: string): string {
-  const decoded = Buffer.from(cursor, "base64url").toString("utf8");
-  if (decoded.length === 0 || encodeCursor(decoded) !== cursor) {
-    throw new Error("invalid_catalog_cursor");
-  }
-  return decoded;
-}
+import {
+  currentGameReleases,
+  matchesCatalogQuery,
+  matchesReleaseIdentity,
+  type PublishedCatalogEntry,
+} from "../core/current-game-release.js";
+import { decodeCatalogCursor, encodeCatalogCursor } from "./catalog-cursor.js";
 
 function copy(record: GameRelease): GameRelease {
   return structuredClone(record);
 }
 
+function publicationEntry(release: GameRelease): PublishedCatalogEntry {
+  const publishedAtEpochMs = Date.parse(release.publishedAt);
+  if (!Number.isFinite(publishedAtEpochMs)) throw new Error("invalid_catalog_publication_time");
+  return { release, publishedAtEpochMs };
+}
+
+function page(matches: readonly GameRelease[], limit: number): CatalogPage {
+  const items = matches.slice(0, limit).map(copy);
+  const last = items.at(-1);
+  return {
+    items,
+    ...(matches.length > items.length && last !== undefined
+      ? { nextCursor: encodeCatalogCursor(last.packageId) }
+      : {}),
+  };
+}
+
+function list(records: readonly GameRelease[], query: CatalogQuery): CatalogPage {
+  const after = query.cursor === undefined ? "" : decodeCatalogCursor(query.cursor);
+  const matches = records.filter(
+    (release) => release.packageId > after && matchesCatalogQuery(release, query.query ?? ""),
+  );
+  return page(matches, query.limit);
+}
+
+function find(
+  records: readonly GameRelease[],
+  packageId: string,
+  version?: string,
+): GameRelease | undefined {
+  const release = records.find((candidate) =>
+    matchesReleaseIdentity(candidate, packageId, version),
+  );
+  return release === undefined ? undefined : copy(release);
+}
+
+export function createInMemoryGameCatalogRepository(
+  input: readonly GameRelease[],
+): GameCatalogRepository {
+  const releases = input.map(copy);
+  const current = currentGameReleases(releases.map(publicationEntry));
+  return {
+    list: (query) => Promise.resolve().then(() => list(current, query)),
+    findById: (packageId, version) =>
+      Promise.resolve(find(version === undefined ? current : releases, packageId, version)),
+  };
+}
+
+/** Constructor compatibility; factories own adapters and core functions own policy. */
 export class InMemoryGameCatalogRepository implements GameCatalogRepository {
-  readonly #records: readonly GameRelease[];
+  readonly list: GameCatalogRepository["list"];
+  readonly findById: GameCatalogRepository["findById"];
 
   constructor(records: readonly GameRelease[]) {
-    this.#records = records
-      .map(copy)
-      .sort((left, right) => left.packageId.localeCompare(right.packageId));
-  }
-
-  async list({ query, limit, cursor }: CatalogQuery): Promise<CatalogPage> {
-    const normalizedQuery = query?.trim().toLocaleLowerCase();
-    const afterPackageId = cursor === undefined ? undefined : decodeCursor(cursor);
-
-    const matches = this.#records.filter((record) => {
-      if (afterPackageId !== undefined && record.packageId <= afterPackageId) {
-        return false;
-      }
-      if (normalizedQuery === undefined || normalizedQuery.length === 0) {
-        return true;
-      }
-
-      const searchable = [
-        record.packageId,
-        record.displayName,
-        record.summary,
-        ...record.tags,
-      ].join("\n").toLocaleLowerCase();
-      return searchable.includes(normalizedQuery);
-    });
-
-    const pageRecords = matches.slice(0, limit);
-    const lastRecord = pageRecords.at(-1);
-    const nextCursor = matches.length > pageRecords.length && lastRecord !== undefined
-      ? encodeCursor(lastRecord.packageId)
-      : undefined;
-
-    return {
-      items: pageRecords.map(copy),
-      ...(nextCursor === undefined ? {} : { nextCursor }),
-    };
-  }
-
-  async findById(
-    packageId: string,
-    version?: string,
-  ): Promise<GameRelease | undefined> {
-    const record = this.#records.find((candidate) =>
-      candidate.packageId === packageId
-      && (version === undefined || candidate.version === version));
-    return record === undefined ? undefined : copy(record);
+    const catalog = createInMemoryGameCatalogRepository(records);
+    this.list = (query) => catalog.list(query);
+    this.findById = (packageId, version) => catalog.findById(packageId, version);
   }
 }

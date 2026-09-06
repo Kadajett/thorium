@@ -24,6 +24,7 @@ import type {
   TransferRequest,
 } from "@thorium/game-host-api";
 import { canonicalJson, sha256 } from "./canonical-json.js";
+import { boundedJsonObject } from "./core/bounded-json.js";
 import type { NonceStore } from "./nonce-store.js";
 import { physicalRoomName } from "./room-name.js";
 
@@ -108,44 +109,6 @@ function surfaceFromClaims(claims: PlatformClaims): SurfaceAdmission {
   };
 }
 
-function boundedJsonObject(value: unknown, label: string): JsonObject {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${label}_must_be_an_object`);
-  }
-  let members = 0;
-  const visit = (candidate: unknown, depth: number): void => {
-    if (depth > 8) throw new Error(`${label}_too_deep`);
-    if (candidate === null || typeof candidate === "string" || typeof candidate === "boolean") return;
-    if (typeof candidate === "number") {
-      if (!Number.isFinite(candidate)) throw new Error(`${label}_invalid_number`);
-      return;
-    }
-    if (Array.isArray(candidate)) {
-      members += candidate.length;
-      if (members > 256) throw new Error(`${label}_too_many_members`);
-      for (const member of candidate) visit(member, depth + 1);
-      return;
-    }
-    if (typeof candidate === "object") {
-      const record = candidate as Record<string, unknown>;
-      const keys = Object.keys(record);
-      members += keys.length;
-      if (members > 256) throw new Error(`${label}_too_many_members`);
-      for (const key of keys) {
-        if (key === "__proto__" || key === "constructor" || key === "prototype") {
-          throw new Error(`${label}_unsafe_key`);
-        }
-        visit(record[key], depth + 1);
-      }
-      return;
-    }
-    throw new Error(`${label}_invalid_value`);
-  };
-  visit(value, 0);
-  const canonical = canonicalJson(value);
-  if (Buffer.byteLength(canonical) > 4_096) throw new Error(`${label}_too_large`);
-  return JSON.parse(canonical) as JsonObject;
-}
 
 function hashJoinOptions(options: JsonObject): string {
   return sha256(canonicalJson(boundedJsonObject(options, "join_options")));

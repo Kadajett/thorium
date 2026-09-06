@@ -116,7 +116,7 @@ export interface GameRelease {
   };
   readonly controls: readonly SemanticControl[];
   readonly controllerBindings?: ControllerBindings;
-  readonly capabilities: readonly ("same-device-peer" | "colyseus-session")[];
+  readonly capabilities: readonly ("same-device-peer" | "colyseus-session" | "local-save-v1")[];
   readonly budgets: {
     readonly maxPackageBytes: number;
     readonly maxFileCount: number;

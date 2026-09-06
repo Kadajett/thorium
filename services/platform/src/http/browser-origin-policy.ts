@@ -53,5 +53,6 @@ export function createWebSocketOriginGuard(
     if (origin !== null && !policy.allows(origin)) {
       return new Response(null, { status: 403 });
     }
+    return undefined;
   };
 }

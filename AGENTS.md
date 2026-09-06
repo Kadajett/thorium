@@ -21,6 +21,8 @@ These rules apply to the whole repository.
 
 ## Quality
 
+- Follow `docs/quality.md`: functional core with isolated effect adapters and enforced strict type/complexity/Halstead budgets.
+- Run `pnpm check:quality`; existing violations are failures, not a baseline allowance. Do not suppress or raise limits to pass.
 - Use strict TypeScript and validate all network/package input at runtime.
 - Test through public interfaces. Keep host adapters replaceable with in-memory test adapters.
 - Keep render-loop work free of catalog I/O, downloads, archive extraction, and token refresh.

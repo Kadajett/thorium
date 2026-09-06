@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { WebGameManifest } from "./manifest.js";
-import type { JsonValue } from "./types.js";
+import { canonicalJson } from "./core/canonical-json.js";
+export { canonicalJson } from "./core/canonical-json.js";
 
 export interface PackageFile {
   readonly path: string;
@@ -39,28 +40,6 @@ export interface PackageArchive {
   readonly bytes: Uint8Array;
 }
 
-function normalize(value: unknown): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new TypeError("Canonical JSON cannot contain non-finite numbers");
-    return value;
-  }
-  if (Array.isArray(value)) return value.map(normalize);
-  if (typeof value === "object") {
-    const result: Record<string, JsonValue> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      const child = (value as Record<string, unknown>)[key];
-      if (child !== undefined) result[key] = normalize(child);
-    }
-    return result;
-  }
-  throw new TypeError(`Canonical JSON cannot contain ${typeof value}`);
-}
-
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(normalize(value));
-}
-
 export function sha256(bytes: string | Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -70,12 +49,7 @@ export function buildDeployDescriptor(
   packageFiles: readonly PackageFile[],
   archive: PackageArchive,
 ): DeployDescriptor {
-  const byPath = new Map(packageFiles.map((file) => [file.path, file.bytes]));
-  const expected = [...manifest.runtime.files].sort();
-  const missing = expected.filter((path) => !byPath.has(path));
-  if (missing.length > 0) throw new Error(`Missing package files: ${missing.join(", ")}`);
-  const unexpected = [...byPath.keys()].filter((path) => !expected.includes(path));
-  if (unexpected.length > 0) throw new Error(`Unexpected package files: ${unexpected.join(", ")}`);
+  const files = executionFiles(manifest.runtime.files, packageFiles);
 
   return {
     descriptorSchema: 1,
@@ -89,11 +63,7 @@ export function buildDeployDescriptor(
       kind: "web-v1",
       main: manifest.runtime.entrypoints.main.path,
       companion: manifest.runtime.entrypoints.companion.path,
-      files: expected.map((path) => {
-        const bytes = byPath.get(path);
-        if (!bytes) throw new Error(`Missing package file: ${path}`);
-        return { path, sha256: sha256(bytes), size: bytes.byteLength };
-      }),
+      files,
     },
     capabilities: [...manifest.capabilities].sort(),
     bundle: {
@@ -103,4 +73,25 @@ export function buildDeployDescriptor(
     },
     deployable: true,
   };
+}
+function executionFiles(
+  expected: readonly string[],
+  files: readonly PackageFile[],
+): DeployDescriptor["execution"]["files"] {
+  const byPath = new Map(files.map((file) => [file.path, file.bytes]));
+  checkPaths(expected, byPath);
+  return [...expected].sort().map((path) => {
+    const bytes = byPath.get(path);
+    if (bytes === undefined) throw new Error(`Missing package file: ${path}`);
+    return { path, sha256: sha256(bytes), size: bytes.byteLength };
+  });
+}
+function checkPaths(expected: readonly string[], byPath: ReadonlyMap<string, Uint8Array>): void {
+  const missing = expected.filter((path) => !byPath.has(path));
+  rejectFiles(missing, "Missing");
+  const unexpected = [...byPath.keys()].filter((path) => !expected.includes(path));
+  rejectFiles(unexpected, "Unexpected");
+}
+function rejectFiles(files: readonly string[], reason: string): void {
+  if (files.length > 0) throw new Error(`${reason} package files: ${files.join(", ")}`);
 }

@@ -11,7 +11,7 @@ import {
 import type { SessionTicketBundle } from "../src/security/session-ticket-service.js";
 import { createTestHarness, TEST_GAMES, TEST_SESSION_SECRET } from "./test-harness.js";
 
-async function fixture() {
+async function fixture(requiresOnline = true) {
   const keys = await generateKeyPair("EdDSA", { extractable: true });
   const privateKey = await exportPKCS8(keys.privateKey);
   const harness = createTestHarness();
@@ -26,7 +26,7 @@ async function fixture() {
     },
     multiplayer: {
       ...TEST_GAMES[0]!.multiplayer,
-      requiresOnline: true,
+      requiresOnline,
     },
   };
   const release = {
@@ -79,6 +79,17 @@ async function fixture() {
 }
 
 describe("shared game host authority", () => {
+  it("routes optional-online games through their shared authority for online sessions", async () => {
+    const f = await fixture(false);
+    const bundle = await f.start();
+    expect(bundle.endpoint).toBe("https://games.yougotserved.dev/play");
+    expect(bundle.roomName).toBe(sharedHostPhysicalRoomName(f.release));
+    const first = bundle.surfaces[0];
+    if (first === undefined) throw new Error("Expected an issued surface ticket");
+    const claims = decodeJwt(first.ticket);
+    expect(claims.aud).toBe("thorium-game-host");
+  });
+
   it("derives one collision-resistant physical room name for an exact release", async () => {
     const f = await fixture();
     expect(sharedHostPhysicalRoomName(f.release)).toMatch(/^g_[a-f0-9]{32}$/);

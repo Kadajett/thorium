@@ -8,12 +8,30 @@
     "node": ">=24"
   },
   "scripts": {
+    "lint": "node --import tsx tools/quality/run.mts",
+    "format:check": "prettier --check \"{packages,services,games,tools}/**/*.{ts,mts,js,mjs}\" \"apps/android/scripts/**/*.{mjs,mts}\"",
+    "test:quality": "node --import tsx --test tools/quality/*.test.mts",
+    "test:android-update": "node --import tsx --test tools/android-update/*.test.mts",
+    "check:quality": "tsc -p tsconfig.json && pnpm test:quality && pnpm test:android-update && pnpm lint && pnpm format:check",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck && pnpm -r --if-present check",
     "test": "pnpm -r --if-present test",
     "test:android-game-gate": "node --test apps/android/scripts/frame-present.test.mjs",
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
-    "check:android": "cd apps/android && ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:rust"
+    "check:android": "cd apps/android && ./gradlew :app:detekt :app:detektDebug :app:detektDebugUnitTest :app:detektDebugAndroidTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug",
+    "check": "pnpm check:quality && pnpm typecheck && pnpm test && pnpm test:android-game-gate && pnpm build && pnpm check:rust"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/eslint": "9.6.1",
+    "@types/node": "24.10.1",
+    "eslint": "10.10.0",
+    "eslint-plugin-functional": "10.0.0",
+    "eslint-plugin-sonarjs": "4.2.0",
+    "estree-halstead": "0.4.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.69.0"
   }
 }

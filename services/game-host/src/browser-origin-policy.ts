@@ -41,5 +41,6 @@ export function createUpgradeGuard(
     if (!path.startsWith(`${basePath}/`) || (origin !== null && !policy.allows(origin))) {
       return new Response(null, { status: 403 });
     }
+    return undefined;
   };
 }

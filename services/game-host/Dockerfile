@@ -5,6 +5,7 @@ ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
 WORKDIR /workspace
+COPY patches ./patches
 
 FROM pnpm AS production-dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -14,6 +15,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter @thorium/gam
 
 FROM pnpm AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.strict.json ./
 COPY packages/game-host-api/package.json ./packages/game-host-api/package.json
 COPY packages/game-host-api/tsconfig.json ./packages/game-host-api/tsconfig.json
 COPY packages/game-host-api/src ./packages/game-host-api/src
