@@ -109,3 +109,16 @@ Its signing certificate SHA-256 is unchanged from dev.9:
 The release includes `thorium-android-update.json` and the APK checksum.
 The separate manual-test workflow now produces verified artifacts for operator
 publication; it does not replace the normal strict release workflow.
+
+### Post-release generator check
+
+A fresh full-quality run caught one additional Halstead finding introduced by
+the manual release-tag check. Release identity/tag validation now has its own
+adapter function, separate from manifest file generation. The complete metadata
+source/test quality slice and all seven tests pass with the same limits.
+
+The updated CLI was exercised against the exact published dev.10 APK. Matching
+CI/manual tags produced byte-identical public metadata; either mismatched tag
+was rejected without creating output. Reusing the successful output path failed
+with `EEXIST` and preserved its bytes. This source-only refactor did not rebuild
+the APK or replace any public release asset.

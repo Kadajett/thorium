@@ -4,6 +4,14 @@ The September 5 rewrite is in progress. Enabling these gates is not evidence
 that the existing application already satisfies them. There is no grandfather
 baseline and no general permission to suppress findings.
 
+The checkpoints below record their state at the time, including historical
+unpublished status. On September 6 the owner explicitly requested a manual-test
+release: dev.10, SDK 0.1.3, Cinder 0.1.4 and Lexicon 0.1.2 are now public. See
+[the publication evidence](manual-release-2026-09-06.md). That release does not
+mean the strict gates passed, establish physical Thor performance, or authorize
+future releases to bypass verification. The normal release workflow and limits
+remain unchanged.
+
 ## Scope and dependency direction
 
 Thorium's platform, shared game host, game SDK, author/device tooling and all

@@ -23,11 +23,7 @@ async function apkBytes(apkPath: string) {
   return readFile(apkPath);
 }
 
-async function generate(): Promise<void> {
-  const [apkPath, outputPath] = process.argv.slice(2);
-  if (apkPath === undefined || outputPath === undefined) {
-    throw new Error("Usage: generate.mts APK_PATH OUTPUT_JSON");
-  }
+function releaseIdentity(apkPath: string) {
   const identity = apkIdentity(apkPath);
   if (identity.packageId !== "dev.yougotserved.thorium.debug") {
     throw new Error("Refusing update metadata for a non-release verification package");
@@ -37,6 +33,15 @@ async function generate(): Promise<void> {
   }
   const requestedTag = process.env["THORIUM_ANDROID_RELEASE_TAG"];
   if (requestedTag !== undefined) verifyAndroidReleaseTag(identity, requestedTag);
+  return identity;
+}
+
+async function generate(): Promise<void> {
+  const [apkPath, outputPath] = process.argv.slice(2);
+  if (apkPath === undefined || outputPath === undefined) {
+    throw new Error("Usage: generate.mts APK_PATH OUTPUT_JSON");
+  }
+  const identity = releaseIdentity(apkPath);
   const bytes = await apkBytes(apkPath);
   const manifest = updateManifest(identity, {
     assetName: "thorium-developer-debug.apk",
