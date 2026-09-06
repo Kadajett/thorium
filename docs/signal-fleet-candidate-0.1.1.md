@@ -93,3 +93,23 @@ Evidence is retained under
 `thorium-signal011-present-gameplay-20260906.json`, input logs, restart readbacks
 and screenshots. No publication has occurred. The pending question about FPS
 expectations for static turn-based scenes does not itself change the gate.
+
+## Registered virtual-gamepad follow-up
+
+The earlier shell joystick limitation was resolved for emulator testing without
+changing Android or game code. Root used Android's `uinput` utility to register
+a temporary USB gamepad with real ABS_X/ABS_Y motion ranges. This exercised
+Android's input-device path rather than a shell event with missing ranges.
+See [the virtual-gamepad evidence](debug/virtual-gamepad-2026-09-06.md).
+
+Y-axis down/up, X-axis right/left, diagonal movements and small near-centre
+input all produced the expected Signal cursor and companion-only bridge events.
+Release events arrived when centred; main received none. Both chart HTML values
+and the selected cursor were restored at the end of each run. Normal selection
+changes may trigger the game's own autosave; the probe did not directly write
+saves, play shots, install an APK or alter a package. Both virtual devices were
+removed and observers/forwards cleaned up.
+
+This is a passing registered-controller-path test on the emulator. It does not
+verify the physical Thor's controller calibration, stick feel or performance,
+and does not change the failed presentation gate or publication status.
