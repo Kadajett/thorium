@@ -97,7 +97,7 @@ object CatalogItemPolicy {
         query: String,
     ): List<CatalogItem> {
         val installedByRelease = installed.associateBy { game -> game.releaseKey() }
-        val remoteKeys = remote.mapTo(mutableSetOf()) { release -> release.releaseKey() }
+        val remoteKeys = remote.map { release -> release.releaseKey() }.toSet()
         val remoteItems = remote.map { release ->
             val installedGame = installedByRelease[release.releaseKey()]
             CatalogItem(
@@ -110,9 +110,9 @@ object CatalogItemPolicy {
             )
         }
         val retainedInstalled = installed.filter { game ->
-            game.releaseKey() !in remoteKeys && game.matches(query)
+            game.releaseKey() !in remoteKeys
         }.map { game -> CatalogItem(game, CatalogActionState.INSTALLED) }
-        return remoteItems + retainedInstalled
+        return selectCatalogGames(remoteItems + retainedInstalled).filter { it.game.matches(query) }
     }
 
     private fun CatalogGame.matches(query: String): Boolean =

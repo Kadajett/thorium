@@ -2,6 +2,7 @@ package dev.yougotserved.thorium
 
 import java.net.URI
 import java.security.MessageDigest
+import java.time.Instant
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -11,6 +12,11 @@ object CatalogJsonParser {
     const val MAX_PACKAGE_BYTES = 16L * 1024 * 1024
     const val MAX_FILE_COUNT = 128
     private val digest = Regex("^[0-9a-f]{64}$")
+
+    fun parseCurrentRelease(raw: String): GameRelease = protect {
+        if (raw.toByteArray(Charsets.UTF_8).size > MAX_CATALOG_BYTES) invalid("catalog is too large")
+        parseRelease(JSONObject(raw).requiredObject("game"))
+    }
 
     fun parsePage(raw: String): CatalogPage = protect {
         if (raw.toByteArray(Charsets.UTF_8).size > MAX_CATALOG_BYTES) invalid("catalog is too large")
@@ -71,7 +77,7 @@ object CatalogJsonParser {
         GameRelease(
             manifest = manifest,
             tags = stringList(value.requiredArray("tags"), 32),
-            publishedAt = value.requiredString("publishedAt", 64),
+            publishedAt = value.requiredString("publishedAt", 64).also { Instant.parse(it) },
             contentDigest = value.requiredDigest("contentDigest"),
             bundle = bundle,
         ).also { release ->

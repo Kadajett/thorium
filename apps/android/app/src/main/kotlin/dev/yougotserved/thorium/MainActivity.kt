@@ -7,11 +7,10 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import java.nio.file.Files
-import java.nio.file.Path
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -25,6 +24,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var catalogClient: RemoteCatalogClient
     private lateinit var packageDownloader: PackageDownloader
     private lateinit var gameSessionLauncher: GameSessionLauncher
+    private lateinit var catalogPlayPorts: CatalogPlayPorts
+    private var networkMonitor: AutoCloseable? = null
+    private var networkStatus by mutableStateOf(NetworkStatus.CHECKING)
+    private val preparingGame = AtomicBoolean(false)
     private val catalogControllerCommands = MutableSharedFlow<CatalogControllerCommand>(
         extraBufferCapacity = 16,
     )
@@ -32,6 +35,8 @@ class MainActivity : ComponentActivity() {
     private var catalogItems by mutableStateOf(emptyList<CatalogItem>())
     private var catalogLoading by mutableStateOf(true)
     private var catalogError by mutableStateOf<String?>(null)
+    private var appUpdateState by mutableStateOf(AppUpdateState())
+    private var appUpdater: AndroidAppUpdateBinding? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,20 +48,34 @@ class MainActivity : ComponentActivity() {
             packageStore,
             applicationContext,
         )
+        catalogPlayPorts = CatalogPlayPorts(
+            catalogClient::currentRelease,
+            catalogPackagePort(packageStore, packageDownloader),
+            gameSessionLauncher::start,
+        )
+        networkMonitor = observeAndroidNetwork(this) {
+            networkStatus = it
+            appUpdater?.controller?.check()
+        }
+        appUpdater = createComposedAndroidAppUpdater(this) { appUpdateState = it }
         setContent {
             ThoriumTheme {
-                CatalogScreen(
-                    items = catalogItems,
-                    loading = catalogLoading,
-                    error = catalogError,
-                    onSearch = ::loadCatalog,
-                    onAction = ::handleAction,
-                    onBack = onBackPressedDispatcher::onBackPressed,
-                    controllerCommands = catalogControllerCommands,
-                )
+                Box {
+                    CatalogScreen(
+                        content = CatalogScreenContent(catalogItems, catalogLoading, catalogError, networkStatus),
+                        actions = CatalogLibraryActions(
+                            ::loadCatalog, ::handleAction, onBackPressedDispatcher::onBackPressed,
+                        ),
+                        controllerCommands = catalogControllerCommands,
+                    )
+                    AppUpdateOverlay(appUpdateState, AppUpdateActions(
+                        { appUpdater?.controller?.confirm() }, { appUpdater?.controller?.dismiss() },
+                    ))
+                }
             }
         }
         loadCatalog("")
+        appUpdater?.controller?.check()
     }
 
     @SuppressLint("RestrictedApi")
@@ -66,7 +85,7 @@ class MainActivity : ComponentActivity() {
         }
         CatalogAndroidKeyPolicy.command(event.keyCode, event.action, event.repeatCount)?.let {
             AndroidHostTrace.key(this, "catalog", event)
-            catalogControllerCommands.tryEmit(it)
+            dispatchCatalogCommand(it)
         }
         return true
     }
@@ -75,29 +94,37 @@ class MainActivity : ComponentActivity() {
         val axes = AndroidGamepadMotion.read(event) ?: return super.dispatchGenericMotionEvent(event)
         catalogStickNavigator.command(axes.horizontal, axes.vertical, event.eventTime)?.let {
             AndroidHostTrace.motion(this, "catalog", event)
-            catalogControllerCommands.tryEmit(it)
+            dispatchCatalogCommand(it)
         }
         return true
     }
 
     override fun onDestroy() {
         destroyed.set(true)
+        appUpdater?.close?.invoke()
+        networkMonitor?.close()
         worker.shutdownNow()
         super.onDestroy()
     }
 
+    private val dispatchCatalogCommand: (CatalogControllerCommand) -> Unit = { command ->
+        if (appUpdater?.controller?.control(command) != true) catalogControllerCommands.tryEmit(command)
+    }
+
     private fun loadCatalog(query: String) {
         val request = requestSequence.incrementAndGet()
+        val offline = networkStatus == NetworkStatus.OFFLINE || networkStatus == NetworkStatus.LIMITED
         catalogLoading = true
         catalogError = null
         worker.execute {
             runCatching {
-                val remote = catalogClient.search(query)
-                CatalogItemPolicy.merge(remote.items, packageStore.installedGames(), query)
+                val remote = if (offline) emptyList() else catalogClient.search(query).items
+                CatalogItemPolicy.merge(remote, packageStore.installedGames(), query)
             }.onSuccess { items ->
                 updateUi(request) {
                     catalogItems = items
                     catalogLoading = false
+                    catalogError = if (offline) "Offline library. Online-required games need a connection." else null
                 }
             }.onFailure { error ->
                 val offlineItems = runCatching {
@@ -108,93 +135,36 @@ class MainActivity : ComponentActivity() {
                     catalogLoading = false
                     catalogError = "Remote catalog unavailable. Only previously installed games " +
                         "are available offline. " +
-                        (error.message ?: "")
+                        error.message.orEmpty()
                 }
             }
         }
     }
 
     private fun handleAction(item: CatalogItem) {
-        when (item.actionState) {
-            CatalogActionState.INSTALLED -> play(item)
-            CatalogActionState.AVAILABLE, CatalogActionState.INSTALL_ERROR -> install(item)
-            CatalogActionState.INSTALLING -> Unit
-        }
-    }
-
-    private fun install(item: CatalogItem) {
-        val release = item.game.release ?: return
+        if (item.actionState == CatalogActionState.INSTALLING || !preparingGame.compareAndSet(false, true)) return
+        val network = networkStatus
         replaceItem(item, item.copy(actionState = CatalogActionState.INSTALLING, error = null))
+        catalogError = null
         worker.execute {
-            var archive: Path? = null
-            runCatching {
-                archive = packageDownloader.download(release)
-                packageStore.install(requireNotNull(archive), release)
-            }.onSuccess { installedGame ->
-                updateUi {
-                    replaceItem(
-                        item,
-                        item.copy(
-                            game = installedGame,
-                            actionState = CatalogActionState.INSTALLED,
-                            error = null,
-                        ),
-                    )
-                    catalogError = null
-                }
-            }.onFailure { error ->
-                updateUi {
-                    replaceItem(
-                        item,
-                        item.copy(
-                            actionState = CatalogActionState.INSTALL_ERROR,
-                            error = error.message,
-                        ),
-                    )
-                    catalogError = "Install failed: ${error.message ?: "verification error"}"
-                }
-            }.also {
-                archive?.let { downloaded -> runCatching { Files.deleteIfExists(downloaded) } }
+            val result = playCatalogGame(item.game, network, catalogPlayPorts)
+            updateUi {
+                preparingGame.set(false)
+                applyPlayResult(item, result)
             }
         }
     }
 
-    private fun play(item: CatalogItem) {
-        val game = item.game
-        catalogError = null
-        worker.execute {
-            when (val result = gameSessionLauncher.start(game)) {
-                is GameSessionStartResult.Ready -> updateUi {
-                    startActivity(
-                        result.launch.putInto(Intent(this, MainGameActivity::class.java)),
-                    )
-                }
-                is GameSessionStartResult.Failed -> updateUi {
-                    val message = when (result.reason) {
-                        GameSessionStartFailure.RELEASE_INTEGRITY ->
-                            "This installed release failed its integrity check. Reinstall it."
-                        GameSessionStartFailure.LOCAL_PLAYER_POLICY ->
-                            "This game needs more players than one Account Session can provide."
-                        GameSessionStartFailure.AUTHORITY_REJECTED ->
-                            "The game session request was rejected."
-                        GameSessionStartFailure.AUTHORITY_RESPONSE_MISMATCH ->
-                            "The game session response did not match this installed release."
-                        GameSessionStartFailure.ACCOUNT_AUTHORIZATION_UNAVAILABLE ->
-                            "Could not sign in this device for required online play."
-                        GameSessionStartFailure.AUTHORITY_UNAVAILABLE ->
-                            "This game's online authority is temporarily unavailable."
-                    }
-                    if (
-                        result.reason == GameSessionStartFailure.RELEASE_INTEGRITY &&
-                        game.release != null
-                    ) {
-                        replaceItem(
-                            item,
-                            item.copy(actionState = CatalogActionState.INSTALL_ERROR, error = message),
-                        )
-                    }
-                    catalogError = message
-                }
+    private fun applyPlayResult(item: CatalogItem, result: CatalogPlayResult) {
+        when (result) {
+            is CatalogPlayResult.Ready -> {
+                replaceItem(item, CatalogItem(result.game, CatalogActionState.INSTALLED))
+                catalogError = if (result.offline) "Playing offline. Online modes are unavailable." else null
+                startActivity(result.launch.putInto(Intent(this, MainGameActivity::class.java)))
+            }
+            is CatalogPlayResult.Failed -> {
+                replaceItem(item, CatalogItem(result.game, CatalogActionState.INSTALL_ERROR, result.message))
+                catalogError = result.message
             }
         }
     }

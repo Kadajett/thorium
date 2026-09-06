@@ -12,7 +12,8 @@ const [serial, descriptorPath, archivePath, mode] = process.argv.slice(2);
 assert.match(serial ?? '', /^emulator-\d+$/, 'Explicit emulator serial required; this tool must not root a physical device');
 assert.ok(descriptorPath && archivePath && mode === '--local-practice', 'Usage: stage-local-game.mjs emulator-N descriptor.json game.zip --local-practice');
 const adb = process.env.ADB ?? join(homedir(), 'Android/Sdk/platform-tools/adb');
-const applicationId = 'dev.yougotserved.thorium.debug';
+const applicationId = process.env.THORIUM_APP_ID ?? 'dev.yougotserved.thorium.debug';
+assert.ok(['dev.yougotserved.thorium.debug', 'dev.yougotserved.thorium.rewrite'].includes(applicationId), 'Only Thorium debug verification packages may be targeted');
 const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
 function command(args) {
   const result = spawnSync(adb, ['-s', serial, ...args], {encoding:'utf8', timeout:30000, maxBuffer:1024*1024});
@@ -29,7 +30,10 @@ const archive = await readFile(archivePath);
 const { release } = verifyPublishedGameRelease({descriptor, archive:{fileName:basename(archivePath),bytes:archive}, publicBaseUrl:'https://games.yougotserved.dev', publishedAt:new Date().toISOString()});
 const plan = release.players.defaultLocalSeatPlan;
 assert.ok(plan, 'Candidate must declare its PlayerSlot seat plan');
-assert.ok(['0.1.0','^0.1.0','0.1.1','^0.1.1'].includes(release.runtime.sdkCompatibility), 'Candidate must work with the public dev.9 runtime');
+const supportedSdk = applicationId.endsWith('.rewrite')
+  ? ['0.1.0','^0.1.0','0.1.1','^0.1.1','0.1.2','^0.1.2','0.1.3','^0.1.3']
+  : ['0.1.0','^0.1.0','0.1.1','^0.1.1'];
+assert.ok(supportedSdk.includes(release.runtime.sdkCompatibility), 'Candidate SDK must be supported by the selected runtime');
 const session = randomUUID();
 const remoteZip = `/data/local/tmp/thorium-candidate-${session}.zip`;
 const target = `files/game-packages/releases/${release.packageId}/${release.version}/${release.contentDigest}`;

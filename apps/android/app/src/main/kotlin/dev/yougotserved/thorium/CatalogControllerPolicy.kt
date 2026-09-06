@@ -1,7 +1,5 @@
 package dev.yougotserved.thorium
 
-import kotlin.math.abs
-
 object AndroidCatalogKeyCode {
     const val DPAD_UP = 19
     const val DPAD_DOWN = 20
@@ -35,8 +33,7 @@ object CatalogAndroidKeyPolicy {
 
     fun command(keyCode: Int, action: Int, repeatCount: Int): CatalogControllerCommand? {
         if (action != AndroidCatalogKeyAction.DOWN || repeatCount < 0) return null
-        val command = KEY_COMMANDS[keyCode] ?: return null
-        return command.takeIf { repeatCount == 0 || it.isMovement() }
+        return KEY_COMMANDS[keyCode]?.takeIf { repeatCount == 0 || it.isMovement() }
     }
 
     private fun CatalogControllerCommand.isMovement(): Boolean = when (this) {
@@ -63,55 +60,20 @@ object CatalogAndroidKeyPolicy {
 }
 
 class CatalogStickNavigator(
-    private val activationThreshold: Float = 0.62f,
-    private val releaseThreshold: Float = 0.34f,
-    private val initialRepeatDelayMillis: Long = 360,
-    private val repeatIntervalMillis: Long = 120,
+    activationThreshold: Float = CATALOG_STICK_ACTIVATION,
+    releaseThreshold: Float = CATALOG_STICK_RELEASE,
+    initialRepeatDelayMillis: Long = CATALOG_STICK_INITIAL_REPEAT_MILLIS,
+    repeatIntervalMillis: Long = CATALOG_STICK_REPEAT_MILLIS,
 ) {
-    private var activeDirection: CatalogControllerCommand? = null
-    private var nextRepeatAtMillis = 0L
-
-    init {
-        require(activationThreshold in 0f..1f)
-        require(releaseThreshold in 0f..activationThreshold)
-        require(initialRepeatDelayMillis >= 0)
-        require(repeatIntervalMillis > 0)
-    }
+    private val policy = CatalogStickPolicy(
+        activationThreshold, releaseThreshold, initialRepeatDelayMillis, repeatIntervalMillis,
+    )
+    private var state = CatalogStickState()
 
     fun command(horizontal: Float, vertical: Float, eventTimeMillis: Long): CatalogControllerCommand? {
-        require(horizontal.isFinite())
-        require(vertical.isFinite())
-        require(eventTimeMillis >= 0)
-
-        val strongestMagnitude = maxOf(abs(horizontal), abs(vertical))
-        if (strongestMagnitude <= releaseThreshold) {
-            activeDirection = null
-            nextRepeatAtMillis = 0
-            return null
-        }
-        if (strongestMagnitude < activationThreshold) return null
-
-        val direction = if (abs(horizontal) > abs(vertical)) {
-            if (horizontal < 0) {
-                CatalogControllerCommand.MOVE_LEFT
-            } else {
-                CatalogControllerCommand.MOVE_RIGHT
-            }
-        } else if (vertical < 0) {
-            CatalogControllerCommand.MOVE_UP
-        } else {
-            CatalogControllerCommand.MOVE_DOWN
-        }
-
-        if (direction != activeDirection) {
-            activeDirection = direction
-            nextRepeatAtMillis = eventTimeMillis + initialRepeatDelayMillis
-            return direction
-        }
-        if (eventTimeMillis < nextRepeatAtMillis) return null
-
-        nextRepeatAtMillis = eventTimeMillis + repeatIntervalMillis
-        return direction
+        val transition = reduceCatalogStick(state, CatalogStickSample(horizontal, vertical, eventTimeMillis), policy)
+        state = transition.state
+        return transition.command
     }
 }
 
@@ -150,25 +112,11 @@ object CatalogFocusPolicy {
     ): CatalogFocus {
         require(itemCount >= 0)
         require(columnCount > 0)
-        val current = focus.copy(
-            cardIndex = if (itemCount == 0) 0 else focus.cardIndex.coerceAtMost(itemCount - 1),
-        )
+        val current = normalized(focus, itemCount)
         return when (current.target) {
             CatalogFocusTarget.CARD -> moveFromCard(current, command, itemCount, columnCount)
-            CatalogFocusTarget.SEARCH -> when (command) {
-                CatalogControllerCommand.MOVE_RIGHT -> current.copy(
-                    target = CatalogFocusTarget.REFRESH,
-                )
-                CatalogControllerCommand.MOVE_DOWN -> current.toCardIfPresent(itemCount)
-                else -> current
-            }
-            CatalogFocusTarget.REFRESH -> when (command) {
-                CatalogControllerCommand.MOVE_LEFT -> current.copy(
-                    target = CatalogFocusTarget.SEARCH,
-                )
-                CatalogControllerCommand.MOVE_DOWN -> current.toCardIfPresent(itemCount)
-                else -> current
-            }
+            CatalogFocusTarget.SEARCH -> moveFromSearch(current, command, itemCount)
+            CatalogFocusTarget.REFRESH -> moveFromRefresh(current, command, itemCount)
         }
     }
 
@@ -202,32 +150,50 @@ object CatalogFocusPolicy {
         itemCount: Int,
         columnCount: Int,
     ): CatalogFocus {
-        if (itemCount == 0) {
-            return if (command == CatalogControllerCommand.MOVE_UP) {
+        return when {
+            command == CatalogControllerCommand.MOVE_UP && focus.cardIndex < columnCount ->
                 focus.copy(target = CatalogFocusTarget.SEARCH)
-            } else {
-                focus
-            }
+            itemCount == 0 -> focus
+            else -> focus.copy(cardIndex = movedCardIndex(focus.cardIndex, command, itemCount, columnCount))
         }
-        val current = focus.cardIndex
-        val next = when (command) {
-            CatalogControllerCommand.MOVE_UP -> {
-                if (current < columnCount) return focus.copy(target = CatalogFocusTarget.SEARCH)
-                current - columnCount
-            }
+    }
+
+    private fun movedCardIndex(
+        current: Int,
+        command: CatalogControllerCommand,
+        itemCount: Int,
+        columnCount: Int,
+    ): Int = when (command) {
+            CatalogControllerCommand.MOVE_UP -> current - columnCount
             CatalogControllerCommand.MOVE_DOWN ->
                 (current + columnCount).takeIf { it < itemCount } ?: current
             CatalogControllerCommand.MOVE_LEFT ->
                 if (current % columnCount == 0) current else current - 1
-            CatalogControllerCommand.MOVE_RIGHT ->
-                if (current % columnCount == columnCount - 1 || current == itemCount - 1) {
-                    current
-                } else {
-                    current + 1
-                }
+            CatalogControllerCommand.MOVE_RIGHT -> nextCardInRow(current, itemCount, columnCount)
             else -> current
         }
-        return focus.copy(cardIndex = next)
+
+    private fun nextCardInRow(current: Int, itemCount: Int, columnCount: Int): Int =
+        if (current % columnCount == columnCount - 1 || current == itemCount - 1) current else current + 1
+
+    private fun moveFromSearch(
+        focus: CatalogFocus,
+        command: CatalogControllerCommand,
+        itemCount: Int,
+    ): CatalogFocus = when (command) {
+        CatalogControllerCommand.MOVE_RIGHT -> focus.copy(target = CatalogFocusTarget.REFRESH)
+        CatalogControllerCommand.MOVE_DOWN -> focus.toCardIfPresent(itemCount)
+        else -> focus
+    }
+
+    private fun moveFromRefresh(
+        focus: CatalogFocus,
+        command: CatalogControllerCommand,
+        itemCount: Int,
+    ): CatalogFocus = when (command) {
+        CatalogControllerCommand.MOVE_LEFT -> focus.copy(target = CatalogFocusTarget.SEARCH)
+        CatalogControllerCommand.MOVE_DOWN -> focus.toCardIfPresent(itemCount)
+        else -> focus
     }
 
     private fun CatalogFocus.toCardIfPresent(itemCount: Int): CatalogFocus =

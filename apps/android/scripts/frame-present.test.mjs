@@ -156,7 +156,7 @@ test('raw evidence and device clock bounds replay the same assessment without pr
 test('CLI evidence creation is exclusive, private, and records failure without contacting a device', () => {
   const directory = mkdtempSync(join(tmpdir(),'thorium-present-test-'));
   const script = fileURLToPath(new URL('./measure-game-present.mjs',import.meta.url));
-  const invoke = output => spawnSync(process.execPath,[script,'fixture-serial','fixture.game','0.0.1','0'.repeat(64),'60','5000','--output',output],
+  const invoke = (output, extra = []) => spawnSync(process.execPath,[script,'fixture-serial','fixture.game','0.0.1','0'.repeat(64),'60','5000','--output',output,...extra],
     {encoding:'utf8',env:{...process.env,ADB:join(directory,'nonexistent-adb')}});
   try {
     const output = join(directory,'evidence.json');
@@ -166,6 +166,7 @@ test('CLI evidence creation is exclusive, private, and records failure without c
     const artifact = JSON.parse(original);
     assert.equal(artifact.schema,2);
     assert.equal(artifact.publishApproved,false);
+    assert.equal(artifact.invocation.pollIntervalMs,200);
     assert.equal(artifact.failure.message,'ADB measurement failed');
     assert.equal(statSync(output).mode & 0o777,0o600);
     assert.equal(invoke(output).status,1);
@@ -174,6 +175,14 @@ test('CLI evidence creation is exclusive, private, and records failure without c
     writeFileSync(target,'preserve'); symlinkSync(target,link);
     assert.equal(invoke(link).status,1);
     assert.equal(readFileSync(target,'utf8'),'preserve');
+    const slower = join(directory,'slower.json');
+    assert.equal(invoke(slower,['--poll-interval-ms','400']).status,1);
+    assert.equal(JSON.parse(readFileSync(slower,'utf8')).invocation.pollIntervalMs,400);
+    for (const extra of [['--poll-interval-ms','0'],['--poll-interval-ms','400','--poll-interval-ms','400'],['--poll-interval-ms','10000']]) {
+      const invalid = invoke(join(directory,'invalid.json'),extra);
+      assert.equal(invalid.status,1);
+      assert.match(invalid.stderr,/Unsupported or repeated option/);
+    }
   } finally { rmSync(directory,{recursive:true,force:true}); }
 });
 

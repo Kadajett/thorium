@@ -1,8 +1,30 @@
 import java.net.URI
+import dev.detekt.gradle.Detekt
+import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("dev.detekt")
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(rootProject.file("config/detekt.yml"))
+    debug = providers.gradleProperty("thoriumDetektDebug").map(String::toBoolean).getOrElse(false)
+}
+
+// Android's generated Java symbols (BuildConfig and R) must be available to type-aware rules.
+tasks.withType<Detekt>().configureEach {
+    if (name == "detektDebug") {
+        val compiledJava = tasks.named<JavaCompile>("compileDebugJavaWithJavac")
+        dependsOn(compiledJava)
+        classpath.from(
+            compiledJava.map { it.classpath },
+            compiledJava.flatMap { it.destinationDirectory },
+            androidComponents.sdkComponents.bootClasspath,
+        )
+    }
 }
 
 val catalogBaseUrl = providers.gradleProperty("thoriumCatalogBaseUrl")
@@ -25,8 +47,8 @@ android {
         applicationId = "dev.yougotserved.thorium"
         minSdk = 29
         targetSdk = 37
-        versionCode = 9
-        versionName = "0.1.0-dev.9"
+        versionCode = 10
+        versionName = "0.1.0-dev.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "CATALOG_BASE_URL", "\"${catalogBaseUrl.trimEnd('/')}\"")
     }
@@ -91,4 +113,6 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }

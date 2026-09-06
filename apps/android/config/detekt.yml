@@ -1,0 +1,35 @@
+config:
+  validation: true
+  warningsAsErrors: true
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated: [Composable]
+
+complexity:
+  active: true
+  CognitiveComplexMethod:
+    active: true
+    allowedComplexity: 10
+  CyclomaticComplexMethod:
+    active: true
+    allowedComplexity: 10
+    ignoreSingleWhenExpression: false
+    ignoreSimpleWhenEntries: false
+    ignoreNestingFunctions: false
+    ignoreLocalFunctions: false
+  LongMethod:
+    active: true
+    allowedLines: 40
+  LargeClass:
+    active: true
+    allowedLines: 400
+  LongParameterList:
+    active: true
+    allowedFunctionParameters: 4
+    allowedConstructorParameters: 4
+    ignoreDefaultParameters: false
+    ignoreDataClasses: false
+  NestedBlockDepth:
+    active: true
+    allowedDepth: 3

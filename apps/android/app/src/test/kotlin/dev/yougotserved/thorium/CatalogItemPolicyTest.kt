@@ -2,7 +2,6 @@ package dev.yougotserved.thorium
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CatalogItemPolicyTest {
@@ -51,9 +50,8 @@ class CatalogItemPolicyTest {
 
         val items = CatalogItemPolicy.merge(listOf(release), listOf(stale), "")
 
-        assertEquals(CatalogActionState.AVAILABLE, items.first().actionState)
-        assertNotNull(items.first().game.release)
-        assertEquals(CatalogActionState.INSTALLED, items.last().actionState)
-        assertNull(items.last().game.release)
+        assertEquals(CatalogActionState.AVAILABLE, items.single().actionState)
+        assertNotNull(items.single().game.release)
+        assertEquals(release.contentDigest, items.single().game.contentDigest)
     }
 }

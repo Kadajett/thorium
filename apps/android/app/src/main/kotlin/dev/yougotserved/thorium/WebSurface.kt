@@ -29,6 +29,9 @@ class WebSurface private constructor(
     private var ready = false
     private var resumed = false
     private var destroyed = false
+    private val localSaves = LocalSaveBridge.create(activity, launch) { response ->
+        if (!destroyed) post(response)
+    }
     private val bridgePolicy = HostBridgePolicy.forSurface(launch, role)
     private val pendingMessages = ArrayDeque<String>()
 
@@ -58,6 +61,7 @@ class WebSurface private constructor(
     private fun teardown(notifyGame: Boolean) {
         if (destroyed) return
         destroyed = true
+        localSaves.close()
         if (notifyGame && ready) runCatching {
             postToLiveView(lifecycleMessage("stopped"))
         }
@@ -103,6 +107,7 @@ class WebSurface private constructor(
 
     private fun onGameMessage(message: String) {
         if (destroyed) return
+        if (localSaves.accept(message)) return
         when (val action = bridgePolicy.parse(message)) {
             is HostAction.BootstrapRequested -> post(
                 GameBootstrapMessage.create(launch, role, action.requestId),

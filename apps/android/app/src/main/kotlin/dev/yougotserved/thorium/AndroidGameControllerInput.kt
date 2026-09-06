@@ -3,27 +3,37 @@ package dev.yougotserved.thorium
 import android.view.KeyEvent
 import android.view.MotionEvent
 
+data class ControllerMotionAxes(
+    val values: Map<Int, Double>,
+    val flats: Map<Int, Double> = emptyMap(),
+)
+
 object AndroidGameControllerInput {
-    fun motion(deviceId: Int, source: Int, action: Int, axes: Map<Int, Double>, flats: Map<Int, Double> = emptyMap()): ControllerDeviceInput? {
+    private const val HAT_THRESHOLD = 0.5
+
+    fun motion(deviceId: Int, source: Int, action: Int, readings: ControllerMotionAxes): ControllerDeviceInput? {
         if (!GamepadMotionPolicy.recognizes(source, action)) return null
-        fun axis(primary: Int, fallback: Int = primary): Double {
-            val selected = if (primary in axes) primary else fallback
-            val value = axes[selected] ?: 0.0
-            val flat = flats[selected]?.takeIf { it.isFinite() } ?: 0.0
-            return if (!value.isFinite() || kotlin.math.abs(value) <= maxOf(0.15, flat)) 0.0 else value
+        fun sample(primary: Int, fallback: Int = primary): ControllerAxisSample {
+            val selected = if (primary in readings.values) primary else fallback
+            return ControllerAxisPolicy.sample(readings.values[selected] ?: 0.0, readings.flats[selected] ?: 0.0)
         }
+        fun axis(primary: Int, fallback: Int = primary): Double =
+            ControllerAxisPolicy.scalar(sample(primary, fallback))
+        val left = ControllerAxisPolicy.stick(sample(MotionEvent.AXIS_X), sample(MotionEvent.AXIS_Y))
+        val right = ControllerAxisPolicy.stick(
+            sample(MotionEvent.AXIS_Z, MotionEvent.AXIS_RX), sample(MotionEvent.AXIS_RZ, MotionEvent.AXIS_RY),
+        )
         val hatX = axis(MotionEvent.AXIS_HAT_X)
         val hatY = axis(MotionEvent.AXIS_HAT_Y)
         return ControllerDeviceInput(
             deviceId,
             buttons = mapOf(
-                "dpad-left" to (hatX <= -0.5), "dpad-right" to (hatX >= 0.5),
-                "dpad-up" to (hatY <= -0.5), "dpad-down" to (hatY >= 0.5),
+                "dpad-left" to (hatX <= -HAT_THRESHOLD), "dpad-right" to (hatX >= HAT_THRESHOLD),
+                "dpad-up" to (hatY <= -HAT_THRESHOLD), "dpad-down" to (hatY >= HAT_THRESHOLD),
             ),
             axes = mapOf(
-                "left-x" to axis(MotionEvent.AXIS_X), "left-y" to axis(MotionEvent.AXIS_Y),
-                "right-x" to axis(MotionEvent.AXIS_Z, MotionEvent.AXIS_RX),
-                "right-y" to axis(MotionEvent.AXIS_RZ, MotionEvent.AXIS_RY),
+                "left-x" to left.x, "left-y" to left.y,
+                "right-x" to right.x, "right-y" to right.y,
                 "left-trigger" to axis(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE),
                 "right-trigger" to axis(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS),
             ),
@@ -33,12 +43,14 @@ object AndroidGameControllerInput {
 
     fun motion(event: MotionEvent): ControllerDeviceInput? = motion(
         event.deviceId, event.source, event.actionMasked,
-        motionAxes.mapNotNull { axis ->
-            event.device?.getMotionRange(axis, event.source)?.let { axis to event.getAxisValue(axis).toDouble() }
-        }.toMap(),
-        motionAxes.mapNotNull { axis ->
-            event.device?.getMotionRange(axis, event.source)?.let { axis to it.flat.toDouble() }
-        }.toMap(),
+        ControllerMotionAxes(
+            motionAxes.mapNotNull { axis ->
+                event.device?.getMotionRange(axis, event.source)?.let { axis to event.getAxisValue(axis).toDouble() }
+            }.toMap(),
+            motionAxes.mapNotNull { axis ->
+                event.device?.getMotionRange(axis, event.source)?.let { axis to it.flat.toDouble() }
+            }.toMap(),
+        ),
     )
 
     private val motionAxes = listOf(
@@ -58,7 +70,8 @@ object AndroidGameControllerInput {
 
     fun key(deviceId: Int, keyCode: Int, action: Int): ControllerDeviceInput? {
         if (action != KeyEvent.ACTION_DOWN && action != KeyEvent.ACTION_UP) return null
-        val button = buttons[keyCode] ?: return null
-        return ControllerDeviceInput(deviceId, buttons = mapOf(button to (action == KeyEvent.ACTION_DOWN)))
+        return buttons[keyCode]?.let { button ->
+            ControllerDeviceInput(deviceId, buttons = mapOf(button to (action == KeyEvent.ACTION_DOWN)))
+        }
     }
 }

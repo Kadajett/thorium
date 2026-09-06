@@ -11,8 +11,10 @@ class AndroidGameControllerInputTest {
     @Test
     fun respectsTheLargerOfHardwareFlatAndContractDeadzone() {
         val input = AndroidGameControllerInput.motion(1, InputDevice.SOURCE_GAMEPAD, MotionEvent.ACTION_MOVE,
-            mapOf(MotionEvent.AXIS_X to 0.24, MotionEvent.AXIS_Y to 0.14, MotionEvent.AXIS_Z to 0.5),
-            mapOf(MotionEvent.AXIS_X to 0.3, MotionEvent.AXIS_Y to 0.05, MotionEvent.AXIS_Z to 0.3),
+            ControllerMotionAxes(
+                mapOf(MotionEvent.AXIS_X to 0.24, MotionEvent.AXIS_Y to 0.14, MotionEvent.AXIS_Z to 0.5),
+                mapOf(MotionEvent.AXIS_X to 0.3, MotionEvent.AXIS_Y to 0.05, MotionEvent.AXIS_Z to 0.3),
+            ),
         )!!
         assertEquals(0.0, input.axes.getValue("left-x"), 0.0)
         assertEquals(0.0, input.axes.getValue("left-y"), 0.0)
@@ -21,15 +23,21 @@ class AndroidGameControllerInputTest {
 
     @Test
     fun motionKeepsBothSticksTriggersAndHatSeparateAndUsesStandardFallbackAxes() {
-        val input = AndroidGameControllerInput.motion(9, InputDevice.SOURCE_JOYSTICK, MotionEvent.ACTION_MOVE, mapOf(
-            0 to -0.75, 1 to 0.5, 11 to 0.25, 14 to -0.4, 23 to 0.8, 22 to 0.9,
-            15 to -1.0, 16 to 1.0,
-        ))!!
+        val readings = ControllerMotionAxes(mapOf(
+            0 to -0.75, 1 to 0.5, 11 to 0.25, 14 to -0.4,
+            23 to 0.8, 22 to 0.9, 15 to -1.0, 16 to 1.0,
+        ))
+        val input = AndroidGameControllerInput.motion(
+            9, InputDevice.SOURCE_JOYSTICK, MotionEvent.ACTION_MOVE, readings,
+        )!!
         assertEquals(mapOf("left-x" to -0.75, "left-y" to 0.5, "right-x" to 0.25, "right-y" to -0.4,
             "left-trigger" to 0.8, "right-trigger" to 0.9), input.axes)
-        assertEquals(mapOf("dpad-up" to false, "dpad-down" to true, "dpad-left" to true, "dpad-right" to false), input.buttons)
+        val expectedButtons = mapOf("dpad-up" to false, "dpad-down" to true, "dpad-left" to true, "dpad-right" to false)
+        assertEquals(expectedButtons, input.buttons)
         assertEquals("hat", input.buttonSource)
-        assertNull(AndroidGameControllerInput.motion(9, InputDevice.SOURCE_MOUSE, MotionEvent.ACTION_MOVE, emptyMap()))
+        assertNull(AndroidGameControllerInput.motion(
+            9, InputDevice.SOURCE_MOUSE, MotionEvent.ACTION_MOVE, ControllerMotionAxes(emptyMap()),
+        ))
     }
 
     @Test

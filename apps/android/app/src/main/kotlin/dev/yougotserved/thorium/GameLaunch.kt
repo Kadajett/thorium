@@ -161,7 +161,7 @@ data class GameLaunch(
             "Invalid installed content digest"
         }
         require(
-            capabilities.all { it == "same-device-peer" || it == "colyseus-session" },
+            capabilities.all { it == "same-device-peer" || it == "colyseus-session" || it == "local-save-v1" },
         ) { "Invalid game capability" }
         require(surfaceCapabilities.keys.all { it in SurfaceRole.entries }) {
             "Invalid surface capability role"

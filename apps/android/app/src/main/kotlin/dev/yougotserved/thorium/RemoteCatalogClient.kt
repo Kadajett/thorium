@@ -1,6 +1,5 @@
 package dev.yougotserved.thorium
 
-import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
@@ -9,7 +8,10 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 
-class RemoteCatalogClient(baseUrl: String) {
+class RemoteCatalogClient(
+    baseUrl: String,
+    private val read: (String, Int) -> String = ::readCatalogResponse,
+) {
     private val base = baseUrl.trimEnd('/').also { configured ->
         val uri = runCatching { URI(configured) }.getOrNull()
         require(
@@ -23,42 +25,26 @@ class RemoteCatalogClient(baseUrl: String) {
 
     fun search(query: String?): CatalogPage {
         val normalized = query?.trim()?.takeIf(String::isNotEmpty)
-        require(normalized == null || normalized.length <= 100) { "Search query is too long" }
+        require(normalized == null || normalized.length <= MAX_SEARCH_LENGTH) { "Search query is too long" }
         val path = if (normalized == null) {
             "/v1/catalog/games?limit=20"
         } else {
             "/v1/catalog/games/search?limit=20&q=" +
                 URLEncoder.encode(normalized, Charsets.UTF_8.name())
         }
-        return CatalogJsonParser.parsePage(get("$base$path", CatalogJsonParser.MAX_CATALOG_BYTES))
+        return CatalogJsonParser.parsePage(read("$base$path", CatalogJsonParser.MAX_CATALOG_BYTES))
     }
 
-    private fun get(url: String, limit: Int): String {
-        val connection = URI(url).toURL().openConnection() as HttpURLConnection
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
-        connection.instanceFollowRedirects = false
-        connection.setRequestProperty("Accept", "application/json")
-        return try {
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                throw IllegalStateException("Catalog request failed (${connection.responseCode})")
-            }
-            val declared = connection.contentLengthLong
-            if (declared > limit) throw IllegalStateException("Catalog response is too large")
-            connection.inputStream.use { input ->
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    if (output.size() + count > limit) throw IllegalStateException("Catalog response is too large")
-                    output.write(buffer, 0, count)
-                }
-                output.toString(Charsets.UTF_8.name())
-            }
-        } finally {
-            connection.disconnect()
+    fun currentRelease(packageId: String): GameRelease {
+        require(GameLaunchPolicy.isValidPackageId(packageId)) { "Invalid game ID" }
+        val raw = read("$base/v1/catalog/games/$packageId", CatalogJsonParser.MAX_CATALOG_BYTES)
+        return CatalogJsonParser.parseCurrentRelease(raw).also {
+            require(it.packageId == packageId) { "Catalog returned a different game" }
         }
+    }
+
+    private companion object {
+        const val MAX_SEARCH_LENGTH = 100
     }
 }
 

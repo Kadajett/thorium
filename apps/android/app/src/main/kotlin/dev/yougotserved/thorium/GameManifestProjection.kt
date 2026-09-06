@@ -182,10 +182,10 @@ object GameManifestProjectionParser {
         }
         if (controls.map { it.id }.toSet().size != controls.size) invalid("control ids are duplicated")
 
-        val capabilities = stringList(value.requiredArray("capabilities"), 2)
+        val capabilities = stringList(value.requiredArray("capabilities"), 3)
         if (
             capabilities.toSet().size != capabilities.size ||
-            capabilities.any { it != "same-device-peer" && it != "colyseus-session" }
+            capabilities.any { it != "same-device-peer" && it != "colyseus-session" && it != "local-save-v1" }
         ) invalid("capabilities are invalid")
 
         val multiplayerJson = value.requiredObject("multiplayer")
@@ -354,7 +354,9 @@ object GameManifestProjectionParser {
 
     // The host bridge implements SDK 0.1.1 while retaining the 0.1.0 contract.
     // Do not admit future patch requirements merely because their major/minor match.
-    private val SUPPORTED_SDK_REQUIREMENTS = setOf("0.1.0", "^0.1.0", "0.1.1", "^0.1.1")
+    private val SUPPORTED_SDK_REQUIREMENTS = setOf(
+        "0.1.0", "^0.1.0", "0.1.1", "^0.1.1", "0.1.2", "^0.1.2", "0.1.3", "^0.1.3",
+    )
 
     private val MANIFEST_KEYS = setOf(
         "\$schema",

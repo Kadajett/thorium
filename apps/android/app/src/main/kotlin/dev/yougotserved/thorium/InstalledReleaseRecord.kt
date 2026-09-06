@@ -280,7 +280,7 @@ object InstalledReleaseRecordCodec {
         } else {
             throw CatalogParseException("capabilities missing")
         }
-        if (capabilities.any { it != "same-device-peer" && it != "colyseus-session" }) {
+        if (capabilities.any { it != "same-device-peer" && it != "colyseus-session" && it != "local-save-v1" }) {
             throw CatalogParseException("capabilities are invalid")
         }
         val maxLocalSlots = if (schema == 1) {

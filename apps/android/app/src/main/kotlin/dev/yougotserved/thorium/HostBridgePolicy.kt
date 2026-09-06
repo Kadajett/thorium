@@ -212,6 +212,9 @@ object GameBootstrapMessage {
         launch.sessionCapability(role)?.let { capability ->
             bootstrap.put("colyseus", capability.toJson())
         }
+        if (LocalSaveLimits.CAPABILITY in launch.capabilities) {
+            bootstrap.put("localSave", LocalSaveProtocol.grant())
+        }
         return HostBridgePolicy.bootstrapResponse(requestId, bootstrap)
     }
 }

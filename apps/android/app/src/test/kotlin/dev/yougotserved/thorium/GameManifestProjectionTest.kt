@@ -11,11 +11,14 @@ class GameManifestProjectionTest {
     fun supportsCurrentAndLegacySdkRequirementsButRejectsFutureContracts() {
         val manifest = fixtureManifest()
         val runtime = manifest.getJSONObject("runtime")
-        listOf("0.1.0", "^0.1.0", "0.1.1", "^0.1.1").forEach { supported ->
+        val supportedRequirements = listOf(
+            "0.1.0", "^0.1.0", "0.1.1", "^0.1.1", "0.1.2", "^0.1.2", "0.1.3", "^0.1.3",
+        )
+        supportedRequirements.forEach { supported ->
             runtime.put("sdkCompatibility", supported)
             assertEquals(supported, GameManifestProjectionParser.parseManifest(manifest).runtime.sdkCompatibility)
         }
-        listOf("0.1.2", "^0.1.2", "^0.2.0", "^1.0.0", "0.1.1-beta.1", "*").forEach { future ->
+        listOf("0.1.4", "^0.1.4", "^0.2.0", "^1.0.0", "0.1.1-beta.1", "*").forEach { future ->
             runtime.put("sdkCompatibility", future)
             assertThrows(future, CatalogParseException::class.java) {
                 GameManifestProjectionParser.parseManifest(manifest)

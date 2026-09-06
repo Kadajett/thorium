@@ -11,13 +11,15 @@ const flagStart = args.findIndex(arg => arg.startsWith('--'));
 const positional = flagStart < 0 ? args : args.slice(0,flagStart);
 assert.ok(positional.length >= 4 && positional.length <= 6,'Expected serial package version digest [60|120] [durationMs]');
 const [serial,packageId,version,digest,fpsInput='60',durationInput='30000'] = positional;
-let outputPath, staticSurface;
+let outputPath, staticSurface, pollIntervalMs = 200, pollIntervalSpecified = false;
 for (let i = flagStart < 0 ? args.length : flagStart; i < args.length; i += 2) {
   const flag = args[i], value = args[i+1];
   assert.ok(value && !value.startsWith('--'),'Every option requires a value');
   if (flag === '--output' && outputPath === undefined) outputPath = value;
   else if (flag === '--static-surface' && staticSurface === undefined && value === 'companion') staticSurface = value;
-  else throw new Error('Unsupported or repeated option (supported: --output PATH, --static-surface companion)');
+  else if (flag === '--poll-interval-ms' && !pollIntervalSpecified && ['100','200','400','800'].includes(value)) {
+    pollIntervalMs = Number(value); pollIntervalSpecified = true;
+  } else throw new Error('Unsupported or repeated option (supported: --output PATH, --static-surface companion, --poll-interval-ms 100|200|400|800)');
 }
 assert.match(serial ?? '', /^[A-Za-z0-9_.:-]+$/, 'An explicit ADB serial is required');
 assert.match(packageId ?? '', /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/);
@@ -26,7 +28,8 @@ assert.match(digest ?? '', /^[a-f0-9]{64}$/);
 const targetFps = Number(fpsInput), durationMs = Number(durationInput);
 assert.ok([60,120].includes(targetFps));
 assert.ok(Number.isInteger(durationMs) && durationMs >= 5000 && durationMs <= 120000);
-const app = 'dev.yougotserved.thorium.debug';
+const app = process.env.THORIUM_APP_ID ?? 'dev.yougotserved.thorium.debug';
+assert.ok(['dev.yougotserved.thorium.debug', 'dev.yougotserved.thorium.rewrite'].includes(app), 'Only Thorium debug verification packages may be measured');
 const adb = process.env.ADB ?? join(homedir(),'Android/Sdk/platform-tools/adb');
 const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
 function command(args) {
@@ -40,7 +43,7 @@ const outputFd = outputPath === undefined ? undefined : openSync(outputPath,'wx'
 const json = value => JSON.stringify(value,(_key,item) => typeof item === 'bigint' ? String(item) : item);
 const evidence = {schema:2,publishApproved:false,clock:'Android CLOCK_MONOTONIC via CDP Performance.Timestamp',
   windowConvention:'[start,end)',policy:'strict requested FPS, both whole-window and unrounded inter-present rates; no nominal-vsync tolerance',
-  invocation:{serial,packageId,version,digest,targetFps,durationMs,staticSurface:staticSurface ?? null},samples:[]};
+  invocation:{serial,applicationId:app,packageId,version,digest,targetFps,durationMs,pollIntervalMs,staticSurface:staticSurface ?? null},samples:[]};
 let localPort, socket;
 try {
   const pid = shell(['pidof',app]); assert.match(pid,/^\d+$/);
@@ -150,7 +153,7 @@ try {
     for (const sample of samples) {
       deviceTime = await collect(sample);
     }
-    await new Promise(resolve => setTimeout(resolve,200));
+    await new Promise(resolve => setTimeout(resolve,pollIntervalMs));
   }
   assert.deepEqual(await inspect(),surfaces,'Candidate placement changed during measurement');
   const results = samples.map(sample => ({role:sample.role,layer:sample.layer,width:sample.width,height:sample.height,

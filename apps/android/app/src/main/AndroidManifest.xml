@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="false"
@@ -11,6 +13,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Thorium"
         android:usesCleartextTraffic="false">
+        <receiver android:name=".AndroidAppUpdateReceiver" android:exported="false" />
         <activity
             android:name=".CompanionGameActivity"
             android:configChanges="density|keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"

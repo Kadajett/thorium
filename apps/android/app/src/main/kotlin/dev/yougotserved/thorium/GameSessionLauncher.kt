@@ -20,7 +20,10 @@ class GameSessionLauncher internal constructor(
     private val newId: () -> String = { UUID.randomUUID().toString() },
 ) {
     @Synchronized
-    fun start(game: CatalogGame): GameSessionStartResult {
+    fun start(game: CatalogGame, onlineAllowed: Boolean = true): GameSessionStartResult {
+        if (!onlineAllowed && game.multiplayerRequiresOnline) {
+            return GameSessionStartResult.Failed(GameSessionStartFailure.NETWORK_REQUIRED)
+        }
         val seatPlan = defaultSeatPlan(game)
             ?: return GameSessionStartResult.Failed(GameSessionStartFailure.LOCAL_PLAYER_POLICY)
         val digest = game.contentDigest
@@ -31,7 +34,7 @@ class GameSessionLauncher internal constructor(
             return GameSessionStartResult.Failed(GameSessionStartFailure.RELEASE_INTEGRITY)
         }
         if (
-            !game.multiplayerOnline ||
+            !onlineAllowed || !game.multiplayerOnline ||
             COLYSEUS_SESSION !in game.capabilities
         ) {
             return GameSessionStartResult.Ready(localLaunch(game, seatPlan))
@@ -189,6 +192,7 @@ sealed interface GameSessionStartResult {
 }
 
 enum class GameSessionStartFailure {
+    NETWORK_REQUIRED,
     RELEASE_INTEGRITY,
     LOCAL_PLAYER_POLICY,
     AUTHORITY_REJECTED,
