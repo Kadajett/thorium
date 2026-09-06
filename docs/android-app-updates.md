@@ -1,7 +1,7 @@
 # GitHub app updates
 
-The in-app updater is under development and is not included in public dev.9.
-Its first release requires a manual APK installation. Subsequent compatible
+The in-app updater is included in the public dev.10 manual-test prerelease; it
+is not included in dev.9. Its first installation is manual. Subsequent compatible
 releases can be offered inside Thorium; Android still asks the user to approve
 installation. This is not silent installation and does not use account tokens.
 
@@ -28,7 +28,7 @@ Only `dev.yougotserved.thorium.debug` releases are eligible. The private
 updater. The generator rejects verification packages and refuses to overwrite
 existing output. APKs are limited to 256 MiB; metadata is limited to 16 KiB.
 Tagged CI builds also reject a GitHub tag that does not match the actual APK
-version name. The unreleased updater source is version code 10 (`dev.10`).
+version name. The first updater release is version code 10 (`dev.10`).
 
 Before invoking Android installation, the client must verify downloaded size
 and hash, APK package/version/minimum SDK, and the same signing certificate set
@@ -91,4 +91,21 @@ GitHub download-to-successful-install run. Fixture HTTP is supplied only by the
 instrumentation Application; the normal Application uses the production GitHub
 adapter. Intents, games, and network responses cannot select this composition.
 Emulator results are not physical AYN Thor verification. The full repository
-quality gate remains red with 554 errors; no updater release has been published.
+quality gate remains red. The owner explicitly requested a manual-test release,
+so dev.10 was published without claiming those gates passed.
+
+## Published manual-test build
+
+[Dev.10 APK](https://github.com/Kadajett/thorium/releases/download/android-v0.1.0-dev.10/thorium-developer-debug.apk)
+was built at commit `67bbb29ee066038823766fd5e5f0665749ed894e` by GitHub run
+`34052532468`. Native tests, Android lint, APK assembly, signer verification and
+update metadata generation succeeded. The integration token could not create
+the release, so an authenticated operator published those exact artifacts.
+
+The public APK has version code 10, size 30,836,416 bytes and SHA-256
+`ad2ddfd01beb8731d5437aebbc2924cfc4444ad385cd125fb2cf383de38d75e6`.
+Its signing certificate SHA-256 is unchanged from dev.9:
+`e70b0874b3d49332a0f82cfdf6e89d81458c40008faa2816b1797963e50a7de9`.
+The release includes `thorium-android-update.json` and the APK checksum.
+The separate manual-test workflow now produces verified artifacts for operator
+publication; it does not replace the normal strict release workflow.
